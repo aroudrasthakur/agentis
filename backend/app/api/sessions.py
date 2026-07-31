@@ -76,6 +76,8 @@ def _serialize_session(session: Session, invite: str | None = None) -> SessionOu
         id=session.id,
         title=session.title,
         status=session.status,
+        nature=session.nature,
+        agora_id=session.agora_id,
         active_participant_id=session.active_participant_id,
         created_at=session.created_at,
         share_url=session_share_url(session.id, invite),
@@ -101,7 +103,13 @@ def _require_invite(session: Session, invite: str | None) -> None:
 async def create_session(
     payload: SessionCreate, db: AsyncSession = Depends(get_db)
 ) -> SessionCreateResponse:
-    session = Session(title=payload.title, status=SessionStatus.active)
+    """Legacy open create. Prefer POST /agoras/{id}/sessions so nature is set in an agora."""
+    session = Session(
+        title=payload.title,
+        status=SessionStatus.active,
+        nature=payload.nature,
+        agora_id=payload.agora_id,
+    )
     db.add(session)
     await db.flush()
 
@@ -136,6 +144,8 @@ async def create_session(
         invite=invite,
         title=session.title,
         status=session.status,
+        nature=session.nature,
+        agora_id=session.agora_id,
     )
 
 

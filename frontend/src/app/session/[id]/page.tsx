@@ -8,6 +8,7 @@ import { useSessionSocket } from "@/hooks/useSessionSocket";
 import { Timeline } from "@/components/session/Timeline";
 import { ParticipantsPanel } from "@/components/session/ParticipantsPanel";
 import { ControlBar } from "@/components/session/ControlBar";
+import { PlanReviewPanel } from "@/components/session/PlanReviewPanel";
 import { ShareButton } from "@/components/session/ShareButton";
 import { Badge } from "@/components/ui/badge";
 
@@ -98,7 +99,11 @@ function SessionRoom() {
         <div>
           <h1 className="font-display text-2xl text-ink">{session.title}</h1>
           <p className="text-xs text-ink/45">
-            {connected ? "Live" : "Reconnecting…"} · {session.id}
+            {connected ? "Live" : "Reconnecting…"}
+            {session.nature
+              ? ` · ${session.nature === "training" ? "Training" : "Multi-agent"}`
+              : ""}{" "}
+            · {session.id}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -123,6 +128,7 @@ function SessionRoom() {
             <Timeline events={session.events} />
             <div ref={bottomRef} />
           </div>
+          <PlanReviewPanel events={session.events} onAction={send} />
           <ControlBar
             events={session.events}
             participants={session.participants}

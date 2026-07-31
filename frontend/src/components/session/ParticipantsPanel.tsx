@@ -12,6 +12,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { PolicyEditor } from "@/components/session/PolicyEditor";
 
 export function ParticipantsPanel({
   participants,
@@ -86,6 +87,7 @@ export function ParticipantsPanel({
         ))}
       </ul>
       <AttachAgentDialog available={available} onAttach={onAttach} />
+      <PolicyEditor actionType="process_refund" />
     </aside>
   );
 }

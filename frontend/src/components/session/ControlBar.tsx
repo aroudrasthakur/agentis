@@ -29,7 +29,10 @@ export function ControlBar({
     () => [...events].sort((a, b) => b.sequence - a.sequence)[0],
     [events]
   );
-  const needsApproval = Boolean(latest?.requires_approval);
+  const needsPlanApproval =
+    Boolean(latest?.requires_approval) && latest?.type === "plan_proposed";
+  const needsActionApproval =
+    Boolean(latest?.requires_approval) && latest?.type === "action_pending";
   const agents = participants.filter((p) => p.kind !== "human" && !p.token_revoked);
   const [redirectOpen, setRedirectOpen] = useState(false);
   const [redirectMsg, setRedirectMsg] = useState("");
@@ -93,22 +96,43 @@ export function ControlBar({
         </DialogContent>
       </Dialog>
 
-      <Button
-        size="sm"
-        variant="teal"
-        disabled={!needsApproval}
-        onClick={() => onAction({ action: "approve" })}
-      >
-        Approve
-      </Button>
-      <Button
-        size="sm"
-        variant="coral"
-        disabled={!needsApproval}
-        onClick={() => onAction({ action: "deny" })}
-      >
-        Deny
-      </Button>
+      {needsPlanApproval ? (
+        <>
+          <Button
+            size="sm"
+            variant="teal"
+            onClick={() => onAction({ action: "approve_plan", removed_step_ids: [] })}
+          >
+            Approve plan
+          </Button>
+          <Button
+            size="sm"
+            variant="coral"
+            onClick={() => onAction({ action: "deny_plan" })}
+          >
+            Deny plan
+          </Button>
+        </>
+      ) : (
+        <>
+          <Button
+            size="sm"
+            variant="teal"
+            disabled={!needsActionApproval}
+            onClick={() => onAction({ action: "approve" })}
+          >
+            Approve
+          </Button>
+          <Button
+            size="sm"
+            variant="coral"
+            disabled={!needsActionApproval}
+            onClick={() => onAction({ action: "deny" })}
+          >
+            Deny
+          </Button>
+        </>
+      )}
 
       <Dialog open={handoffOpen} onOpenChange={setHandoffOpen}>
         <DialogTrigger asChild>

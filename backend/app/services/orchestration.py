@@ -1,4 +1,4 @@
-"""Thin session orchestration: turns, controls, approval gate."""
+"""Thin session orchestration: turns, controls, HITL approval / plan gates."""
 
 from __future__ import annotations
 
@@ -23,6 +23,13 @@ from app.models import (
 )
 from app.schemas import EventOut, ParticipantOut, SessionOut
 from app.services.access import assert_participant_can_call_tool
+from app.services.hitl import (
+    ActionProposal,
+    build_refund_plan,
+    confidence_from_billing,
+    decide_gate,
+    get_policy,
+)
 from app.services.session_service import create_event, get_session_full, session_share_url
 from app.services.tokens import CapabilityDenied, TokenError
 from app.ws.manager import manager
@@ -31,6 +38,8 @@ from app.ws.manager import manager
 _tasks: dict[UUID, asyncio.Task] = {}
 _paused: set[UUID] = set()
 _awaiting_approval: dict[UUID, dict] = {}
+_awaiting_plan: dict[UUID, dict] = {}
+_plan_running: set[UUID] = set()
 _redirect_hint: dict[UUID, str] = {}
 # invite token per session for share_url reconstruction in broadcasts
 _session_invites: dict[UUID, str] = {}
@@ -93,6 +102,8 @@ def _session_payload(session: Session) -> dict:
         id=session.id,
         title=session.title,
         status=session.status,
+        nature=session.nature,
+        agora_id=session.agora_id,
         active_participant_id=session.active_participant_id,
         created_at=session.created_at,
         share_url=session_share_url(session.id, invite),
@@ -131,6 +142,201 @@ async def _agent_participants(session: Session) -> list[Participant]:
     ]
 
 
+async def _wait_while_paused(session_id: UUID) -> None:
+    while session_id in _paused:
+        await asyncio.sleep(0.4)
+
+
+async def _wait_for_gates(session_id: UUID) -> None:
+    """Block until no approval/plan wait and no in-flight plan execution."""
+    while (
+        session_id in _awaiting_approval
+        or session_id in _awaiting_plan
+        or session_id in _plan_running
+    ):
+        await _wait_while_paused(session_id)
+        await asyncio.sleep(0.4)
+
+
+async def _execute_tool(
+    db: AsyncSession,
+    *,
+    endpoint_url: str,
+    participant_id: UUID,
+    tool: str,
+    arguments: dict,
+) -> dict:
+    await assert_participant_can_call_tool(db, participant_id, tool)
+    return await call_mcp_tool(
+        endpoint_url,
+        tool,
+        arguments,
+        db=db,
+        participant_id=participant_id,
+    )
+
+
+async def propose_or_execute_action(
+    db: AsyncSession,
+    session: Session,
+    participant: Participant,
+    proposal: ActionProposal,
+    *,
+    within_plan: bool = False,
+) -> Event:
+    """Apply HITL policy: auto-execute, require approval, or propose a plan."""
+    policy = await get_policy(db, proposal.tool)
+    decision = decide_gate(policy, proposal, within_plan=within_plan)
+    endpoint = participant.endpoint_url or ""
+
+    if decision.outcome == "propose_plan":
+        amount = float(proposal.arguments.get("amount") or 0)
+        plan = build_refund_plan(
+            order_id=str(proposal.arguments.get("order_id") or "ORD-1001"),
+            amount=amount,
+            reason=str(proposal.arguments.get("reason") or "Customer requested refund"),
+            confidence=float(proposal.confidence if proposal.confidence is not None else 0.4),
+        )
+        event = await create_event(
+            db,
+            session_id=session.id,
+            participant_id=participant.id,
+            event_type=EventType.plan_proposed,
+            content=json.dumps(plan),
+            requires_approval=True,
+        )
+        _awaiting_plan[session.id] = {
+            "participant_id": str(participant.id),
+            "endpoint_url": endpoint,
+            "plan": plan,
+        }
+        await db.commit()
+        await _broadcast_event(db, session.id, event)
+        return event
+
+    payload = {
+        "tool": proposal.tool,
+        "arguments": proposal.arguments,
+        "confidence": proposal.confidence,
+        "mode": decision.effective_mode,
+        "decision": decision.outcome,
+        "reason": decision.reason,
+        "within_plan": within_plan,
+    }
+
+    if decision.outcome == "auto":
+        try:
+            result = await _execute_tool(
+                db,
+                endpoint_url=endpoint,
+                participant_id=participant.id,
+                tool=proposal.tool,
+                arguments=proposal.arguments,
+            )
+            content = {**payload, "result": result}
+            event = await create_event(
+                db,
+                session_id=session.id,
+                participant_id=participant.id,
+                event_type=EventType.action_executed,
+                content=json.dumps(content),
+                requires_approval=False,
+            )
+        except (TokenError, CapabilityDenied) as exc:
+            event = await create_event(
+                db,
+                session_id=session.id,
+                participant_id=participant.id,
+                event_type=EventType.action_denied,
+                content=f"Blocked {proposal.tool} — access revoked or out of scope: {exc}",
+            )
+        await db.commit()
+        await _broadcast_event(db, session.id, event)
+        return event
+
+    # require_approval
+    event = await create_event(
+        db,
+        session_id=session.id,
+        participant_id=participant.id,
+        event_type=EventType.action_pending,
+        content=json.dumps(payload),
+        requires_approval=True,
+    )
+    _awaiting_approval[session.id] = {
+        "participant_id": str(participant.id),
+        "endpoint_url": endpoint,
+        "tool": proposal.tool,
+        "arguments": proposal.arguments,
+        "confidence": proposal.confidence,
+        "mode": decision.effective_mode,
+        "within_plan": within_plan,
+    }
+    await db.commit()
+    await _broadcast_event(db, session.id, event)
+    return event
+
+
+async def _execute_approved_plan(
+    session_id: UUID,
+    *,
+    participant_id: UUID,
+    endpoint_url: str,
+    steps: list[dict],
+) -> None:
+    """Run approved plan steps sequentially; honor pause between steps."""
+    from app.db import AsyncSessionLocal
+
+    _plan_running.add(session_id)
+    try:
+        async with AsyncSessionLocal() as db:
+            for step in steps:
+                await _wait_while_paused(session_id)
+
+                session = await get_session_full(db, session_id)
+                if not session or session.status == SessionStatus.completed:
+                    return
+
+                participant = next(
+                    (p for p in session.participants if p.id == participant_id), None
+                )
+                if participant is None or participant.token_revoked_at is not None:
+                    human = next(p for p in session.participants if p.kind == ParticipantKind.human)
+                    event = await create_event(
+                        db,
+                        session_id=session_id,
+                        participant_id=human.id,
+                        event_type=EventType.message,
+                        content="Plan execution stopped — agent detached or token revoked.",
+                    )
+                    await db.commit()
+                    await _broadcast_event(db, session_id, event)
+                    return
+
+                proposal = ActionProposal(
+                    tool=step["action_type"],
+                    arguments=dict(step.get("params") or {}),
+                    confidence=step.get("confidence"),
+                    description=step.get("description"),
+                )
+                event = await propose_or_execute_action(
+                    db, session, participant, proposal, within_plan=True
+                )
+
+                if event.requires_approval:
+                    while session_id in _awaiting_approval:
+                        await _wait_while_paused(session_id)
+                        await asyncio.sleep(0.4)
+                    session = await get_session_full(db, session_id)
+                    if session and any(
+                        e.type in (EventType.action_denied, EventType.plan_denied)
+                        for e in session.events[-3:]
+                    ):
+                        return
+    finally:
+        _plan_running.discard(session_id)
+
+
 async def run_agent_turn(db: AsyncSession, session: Session, participant: Participant) -> Event | None:
     hint = _redirect_hint.pop(session.id, None)
     context = _timeline_text(session)
@@ -157,7 +363,7 @@ async def run_agent_turn(db: AsyncSession, session: Session, participant: Partic
     # remote_mcp
     endpoint = participant.endpoint_url or ""
     try:
-        text = await remote_agent_message(
+        text, billing = await remote_agent_message(
             endpoint, context, db=db, participant_id=participant.id
         )
     except (TokenError, CapabilityDenied) as exc:
@@ -182,37 +388,17 @@ async def run_agent_turn(db: AsyncSession, session: Session, participant: Partic
     await db.commit()
     await _broadcast_event(db, session.id, event)
 
-    # Propose refund action requiring approval (capability checked again at approve time)
-    pending = await create_event(
-        db,
-        session_id=session.id,
-        participant_id=participant.id,
-        event_type=EventType.action_pending,
-        content=json.dumps(
-            {
-                "tool": "process_refund",
-                "arguments": {
-                    "order_id": "ORD-1001",
-                    "amount": 89.99,
-                    "reason": "Customer requested refund for defective item",
-                },
-            }
-        ),
-        requires_approval=True,
-    )
-    _awaiting_approval[session.id] = {
-        "participant_id": str(participant.id),
-        "endpoint_url": endpoint,
-        "tool": "process_refund",
-        "arguments": {
+    confidence = confidence_from_billing(billing if isinstance(billing, dict) else None)
+    proposal = ActionProposal(
+        tool="process_refund",
+        arguments={
             "order_id": "ORD-1001",
             "amount": 89.99,
             "reason": "Customer requested refund for defective item",
         },
-    }
-    await db.commit()
-    await _broadcast_event(db, session.id, pending)
-    return pending
+        confidence=confidence,
+    )
+    return await propose_or_execute_action(db, session, participant, proposal, within_plan=False)
 
 
 async def _orchestration_loop(session_id: UUID) -> None:
@@ -252,9 +438,7 @@ async def _orchestration_loop(session_id: UUID) -> None:
                 await db.commit()
 
             for agent in agents:
-                # Wait while paused
-                while session_id in _paused:
-                    await asyncio.sleep(0.4)
+                await _wait_while_paused(session_id)
 
                 session = await get_session_full(db, session_id)
                 if not session or session.status == SessionStatus.completed:
@@ -272,21 +456,20 @@ async def _orchestration_loop(session_id: UUID) -> None:
                     (p for p in session.participants if p.id == agent.id), None
                 )
                 if participant is None or participant.token_revoked_at is not None:
-                    # Detached / revoked mid-loop — skip
                     continue
                 event = await run_agent_turn(db, session, participant)
 
-                if event and event.requires_approval:
-                    # Halt until approve/deny clears awaiting
-                    while session_id in _awaiting_approval:
-                        if session_id in _paused:
-                            await asyncio.sleep(0.4)
-                            continue
-                        await asyncio.sleep(0.4)
-                    # If denied, stop loop
+                if event and (
+                    event.requires_approval
+                    or session_id in _awaiting_plan
+                    or session_id in _awaiting_approval
+                    or session_id in _plan_running
+                ):
+                    await _wait_for_gates(session_id)
                     session = await get_session_full(db, session_id)
                     if session and any(
-                        e.type == EventType.action_denied for e in session.events[-3:]
+                        e.type in (EventType.action_denied, EventType.plan_denied)
+                        for e in session.events[-5:]
                     ):
                         break
 
@@ -401,14 +584,12 @@ async def handle_control_action(
             raise ValueError("No action pending approval")
         vendor_pid = UUID(pending["participant_id"])
         try:
-            # Enforce vendor's scoped token at execution time (covers mid-session revoke)
-            await assert_participant_can_call_tool(db, vendor_pid, pending["tool"])
-            result = await call_mcp_tool(
-                pending["endpoint_url"],
-                pending["tool"],
-                pending["arguments"],
-                db=db,
+            result = await _execute_tool(
+                db,
+                endpoint_url=pending["endpoint_url"],
                 participant_id=vendor_pid,
+                tool=pending["tool"],
+                arguments=pending["arguments"],
             )
             event = await create_event(
                 db,
@@ -416,6 +597,23 @@ async def handle_control_action(
                 participant_id=human.id,
                 event_type=EventType.action_approved,
                 content=f"Approved {pending['tool']}: {json.dumps(result)}",
+            )
+            executed = await create_event(
+                db,
+                session_id=session_id,
+                participant_id=vendor_pid,
+                event_type=EventType.action_executed,
+                content=json.dumps(
+                    {
+                        "tool": pending["tool"],
+                        "arguments": pending["arguments"],
+                        "confidence": pending.get("confidence"),
+                        "mode": pending.get("mode"),
+                        "decision": "approved",
+                        "within_plan": pending.get("within_plan", False),
+                        "result": result,
+                    }
+                ),
             )
         except (TokenError, CapabilityDenied) as exc:
             event = await create_event(
@@ -425,9 +623,12 @@ async def handle_control_action(
                 event_type=EventType.action_denied,
                 content=f"Blocked {pending['tool']} — access revoked or out of scope: {exc}",
             )
+            executed = None
         _awaiting_approval.pop(session_id, None)
         await db.commit()
         await _broadcast_event(db, session_id, event)
+        if executed is not None:
+            await _broadcast_event(db, session_id, executed)
         return
 
     if action == "deny":
@@ -442,6 +643,53 @@ async def handle_control_action(
             content=f"Denied {pending['tool']}",
         )
         _awaiting_approval.pop(session_id, None)
+        await db.commit()
+        await _broadcast_event(db, session_id, event)
+        return
+
+    if action == "approve_plan":
+        pending = _awaiting_plan.get(session_id)
+        if not pending:
+            raise ValueError("No plan pending approval")
+        plan = dict(pending["plan"])
+        removed = set(data.get("removed_step_ids") or [])
+        steps = [s for s in plan.get("steps", []) if s.get("id") not in removed]
+        plan["steps"] = steps
+        event = await create_event(
+            db,
+            session_id=session_id,
+            participant_id=human.id,
+            event_type=EventType.plan_approved,
+            content=json.dumps(plan),
+        )
+        _awaiting_plan.pop(session_id, None)
+        await db.commit()
+        await _broadcast_event(db, session_id, event)
+
+        if steps:
+            asyncio.create_task(
+                _execute_approved_plan(
+                    session_id,
+                    participant_id=UUID(pending["participant_id"]),
+                    endpoint_url=pending["endpoint_url"],
+                    steps=steps,
+                )
+            )
+        return
+
+    if action == "deny_plan":
+        pending = _awaiting_plan.get(session_id)
+        if not pending:
+            raise ValueError("No plan pending approval")
+        plan = pending["plan"]
+        event = await create_event(
+            db,
+            session_id=session_id,
+            participant_id=human.id,
+            event_type=EventType.plan_denied,
+            content=json.dumps({"plan_id": plan.get("plan_id"), "title": plan.get("title")}),
+        )
+        _awaiting_plan.pop(session_id, None)
         await db.commit()
         await _broadcast_event(db, session_id, event)
         return

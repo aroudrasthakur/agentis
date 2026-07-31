@@ -14,8 +14,9 @@ const sans = DM_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Agentis",
-  description: "Humans and agents, one live session",
+  title: "Agentis — multi-agent collaboration",
+  description:
+    "Humans and agents in one live session, with human-in-the-loop oversight that stays in the room.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

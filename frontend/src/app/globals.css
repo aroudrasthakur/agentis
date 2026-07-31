@@ -3,8 +3,8 @@
 @tailwind utilities;
 
 :root {
-  --bg0: #eef3f4;
-  --bg1: #f7f4ee;
+  --bg0: #f4f7f8;
+  --bg1: #eef2f3;
 }
 
 body {
@@ -13,9 +13,9 @@ body {
 
 .app-shell {
   background:
-    radial-gradient(1200px 600px at 10% -10%, rgba(13, 124, 124, 0.12), transparent 55%),
-    radial-gradient(900px 500px at 90% 0%, rgba(212, 93, 74, 0.1), transparent 50%),
-    linear-gradient(165deg, var(--bg0), var(--bg1));
+    radial-gradient(1100px 560px at 8% -8%, rgba(13, 124, 124, 0.09), transparent 55%),
+    radial-gradient(800px 420px at 96% 4%, rgba(15, 28, 31, 0.04), transparent 50%),
+    linear-gradient(165deg, var(--bg0), #ffffff 45%, var(--bg1));
   background-attachment: fixed;
 }
 
@@ -24,7 +24,7 @@ body {
   pointer-events: none;
   position: fixed;
   inset: 0;
-  opacity: 0.035;
+  opacity: 0.03;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   z-index: 0;
 }
@@ -32,4 +32,47 @@ body {
 .app-shell > * {
   position: relative;
   z-index: 1;
+}
+
+/* Landing: cooler white / silicon wafer field */
+.landing-shell {
+  background:
+    radial-gradient(900px 500px at 75% 30%, rgba(13, 124, 124, 0.07), transparent 60%),
+    radial-gradient(700px 400px at 15% 80%, rgba(15, 28, 31, 0.03), transparent 55%),
+    linear-gradient(180deg, #ffffff 0%, #f7fafb 55%, #eef3f4 100%);
+}
+
+/* Agent mesh: flowing traces along connection paths */
+@keyframes mesh-flow {
+  to {
+    stroke-dashoffset: -48;
+  }
+}
+
+@keyframes mesh-dash-spin {
+  to {
+    stroke-dashoffset: -48;
+  }
+}
+
+.mesh-flow {
+  animation: mesh-flow 2.8s linear infinite;
+}
+
+.mesh-dash-spin {
+  animation: mesh-dash-spin 18s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-mesh-pulse,
+  .animate-mesh-draw,
+  .animate-mesh-float,
+  .mesh-flow,
+  .mesh-dash-spin {
+    animation: none !important;
+  }
+
+  .landing-shell animateTransform {
+    display: none;
+  }
 }

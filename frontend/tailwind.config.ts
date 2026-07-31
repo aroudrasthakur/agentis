@@ -32,9 +32,24 @@ const config: Config = {
           "0%": { opacity: "0", transform: "translateY(8px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
         },
+        "mesh-pulse": {
+          "0%, 100%": { opacity: "0.35", transform: "scale(1)" },
+          "50%": { opacity: "0.9", transform: "scale(1.08)" },
+        },
+        "mesh-draw": {
+          "0%": { strokeDashoffset: "120" },
+          "100%": { strokeDashoffset: "0" },
+        },
+        "mesh-float": {
+          "0%, 100%": { transform: "translateY(0)" },
+          "50%": { transform: "translateY(-6px)" },
+        },
       },
       animation: {
         "fade-up": "fade-up 0.35s ease-out",
+        "mesh-pulse": "mesh-pulse 3.6s ease-in-out infinite",
+        "mesh-draw": "mesh-draw 1.8s ease-out forwards",
+        "mesh-float": "mesh-float 7s ease-in-out infinite",
       },
     },
   },

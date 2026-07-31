@@ -81,7 +81,7 @@ async def remote_agent_message(
     *,
     db: AsyncSession,
     participant_id: UUID,
-) -> str:
+) -> tuple[str, dict[str, Any]]:
     """Ask remote agent for a textual turn; uses check_billing_status then summarizes."""
     del context  # unused for MVP remote turn
     status = await call_mcp_tool(
@@ -91,8 +91,11 @@ async def remote_agent_message(
         db=db,
         participant_id=participant_id,
     )
-    return (
+    if not isinstance(status, dict):
+        status = {"result": status}
+    text = (
         "Vendor Billing reviewed the case.\n"
         f"Billing status: {json.dumps(status)}\n"
-        "I am ready to run process_refund for ORD-1001 ($89.99) pending human approval."
+        "I am ready to run process_refund for ORD-1001 ($89.99) under the active HITL policy."
     )
+    return text, status
