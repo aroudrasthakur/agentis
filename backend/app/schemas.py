@@ -7,8 +7,8 @@ from pydantic import BaseModel, Field
 from app.models import (
     ActionPolicyMode,
     AgentSource,
-    AgoraMemberRole,
     EventType,
+    GatheringMemberRole,
     HostingMode,
     OrgTag,
     ParticipantKind,
@@ -27,6 +27,10 @@ class AgentCreate(BaseModel):
     capabilities: list[str] = Field(default_factory=list)
     is_active: bool = True
     is_public: bool = False
+    version: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    notes: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class AgentUpdate(BaseModel):
@@ -37,6 +41,10 @@ class AgentUpdate(BaseModel):
     org_tag: OrgTag | None = None
     capabilities: list[str] | None = None
     is_public: bool | None = None
+    version: str | None = None
+    tags: list[str] | None = None
+    notes: str | None = None
+    metadata: dict[str, Any] | None = None
 
 
 class AgentOut(BaseModel):
@@ -52,10 +60,39 @@ class AgentOut(BaseModel):
     source: AgentSource = AgentSource.directory
     is_public: bool = False
     owner_user_id: UUID | None = None
+    version: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    notes: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime
+    updated_at: datetime | None = None
     downloaded: bool = False
 
     model_config = {"from_attributes": True}
+
+    @classmethod
+    def from_agent(cls, agent: Any, *, downloaded: bool = False) -> "AgentOut":
+        return cls(
+            id=agent.id,
+            name=agent.name,
+            agent_key=agent.agent_key,
+            org_tag=agent.org_tag,
+            hosting_mode=agent.hosting_mode,
+            endpoint_url=agent.endpoint_url,
+            description=agent.description,
+            capabilities=list(agent.capabilities or []),
+            is_active=agent.is_active,
+            source=agent.source,
+            is_public=agent.is_public,
+            owner_user_id=agent.owner_user_id,
+            version=agent.version,
+            tags=list(agent.tags or []),
+            notes=agent.notes,
+            metadata=dict(agent.metadata_ or {}),
+            created_at=agent.created_at,
+            updated_at=getattr(agent, "updated_at", None),
+            downloaded=downloaded,
+        )
 
 
 class ParticipantOut(BaseModel):
@@ -93,7 +130,7 @@ class SessionCreate(BaseModel):
     title: str = "Customer refund request"
     agent_ids: list[UUID] = Field(default_factory=list)
     nature: SessionNature = SessionNature.multi_agent
-    agora_id: UUID | None = None
+    gathering_id: UUID | None = None
 
 
 class SessionOut(BaseModel):
@@ -101,7 +138,7 @@ class SessionOut(BaseModel):
     title: str
     status: SessionStatus
     nature: SessionNature = SessionNature.multi_agent
-    agora_id: UUID | None = None
+    gathering_id: UUID | None = None
     active_participant_id: UUID | None
     created_at: datetime
     share_url: str | None = None
@@ -126,7 +163,7 @@ class SessionCreateResponse(BaseModel):
     title: str
     status: SessionStatus
     nature: SessionNature = SessionNature.multi_agent
-    agora_id: UUID | None = None
+    gathering_id: UUID | None = None
 
 
 class UserCreate(BaseModel):
@@ -140,11 +177,26 @@ class UserLogin(BaseModel):
     password: str
 
 
+class UserUpdate(BaseModel):
+    display_name: str | None = None
+    bio: str | None = None
+    organization: str | None = None
+    title: str | None = None
+    avatar_url: str | None = None
+    profile: dict[str, Any] | None = None
+
+
 class UserOut(BaseModel):
     id: UUID
     email: str
     display_name: str
+    bio: str | None = None
+    organization: str | None = None
+    title: str | None = None
+    avatar_url: str | None = None
+    profile: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime
+    updated_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 
@@ -155,25 +207,28 @@ class AuthResponse(BaseModel):
     user: UserOut
 
 
-class AgoraCreate(BaseModel):
+class GatheringCreate(BaseModel):
     name: str
     description: str | None = None
 
 
-class AgoraMemberOut(BaseModel):
+class GatheringMemberOut(BaseModel):
     id: UUID
-    agora_id: UUID
+    gathering_id: UUID
     user_id: UUID | None
     invited_email: str | None
-    role: AgoraMemberRole
+    role: GatheringMemberRole
     display_name: str | None = None
     email: str | None = None
+    bio: str | None = None
+    organization: str | None = None
+    title: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
 
 
-class AgoraSessionSummary(BaseModel):
+class GatheringSessionSummary(BaseModel):
     id: UUID
     title: str
     status: SessionStatus
@@ -183,7 +238,7 @@ class AgoraSessionSummary(BaseModel):
     share_url: str | None = None
 
 
-class AgoraOut(BaseModel):
+class GatheringOut(BaseModel):
     id: UUID
     name: str
     description: str | None
@@ -192,26 +247,26 @@ class AgoraOut(BaseModel):
     member_count: int = 0
     agent_count: int = 0
     session_count: int = 0
-    role: AgoraMemberRole | None = None
+    role: GatheringMemberRole | None = None
 
     model_config = {"from_attributes": True}
 
 
-class AgoraDetailOut(AgoraOut):
-    members: list[AgoraMemberOut] = Field(default_factory=list)
+class GatheringDetailOut(GatheringOut):
+    members: list[GatheringMemberOut] = Field(default_factory=list)
     agents: list[AgentOut] = Field(default_factory=list)
-    sessions: list[AgoraSessionSummary] = Field(default_factory=list)
+    sessions: list[GatheringSessionSummary] = Field(default_factory=list)
 
 
-class AgoraInviteRequest(BaseModel):
+class GatheringInviteRequest(BaseModel):
     email: str
 
 
-class AgoraAddAgentsRequest(BaseModel):
+class GatheringAddAgentsRequest(BaseModel):
     agent_ids: list[UUID]
 
 
-class AgoraSessionCreate(BaseModel):
+class GatheringSessionCreate(BaseModel):
     title: str
     nature: SessionNature
     agent_ids: list[UUID] = Field(default_factory=list)
@@ -225,6 +280,10 @@ class LocalAgentCreate(BaseModel):
     endpoint_url: str | None = None
     description: str | None = None
     capabilities: list[str] = Field(default_factory=list)
+    version: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    notes: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class ActionPolicyOut(BaseModel):

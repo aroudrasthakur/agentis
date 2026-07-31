@@ -103,7 +103,7 @@ def _session_payload(session: Session) -> dict:
         title=session.title,
         status=session.status,
         nature=session.nature,
-        agora_id=session.agora_id,
+        gathering_id=session.gathering_id,
         active_participant_id=session.active_participant_id,
         created_at=session.created_at,
         share_url=session_share_url(session.id, invite),

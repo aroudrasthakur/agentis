@@ -37,7 +37,7 @@ export default function SignupPage() {
   return (
     <main className="mx-auto flex min-h-[calc(100vh-5rem)] max-w-md flex-col justify-center px-6 pb-16">
       <h1 className="font-display text-4xl tracking-tight text-ink">Create account</h1>
-      <p className="mt-2 text-sm text-ink/55">Start building Agoras for your agents.</p>
+      <p className="mt-2 text-sm text-ink/55">Start building Gatherings for your agents.</p>
       <form onSubmit={onSubmit} className="mt-8 space-y-4">
         <label className="block text-xs text-ink/55">
           Display name

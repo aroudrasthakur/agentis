@@ -17,20 +17,19 @@ export function SiteNav() {
   }, [pathname]);
 
   const onHome = pathname === "/";
-  const hideBrandEmphasis = onHome;
 
   return (
     <header
       className={cn(
-        "flex items-center justify-between px-6 py-4",
-        onHome && "relative z-20 bg-transparent"
+        "site-nav flex items-center justify-between px-6 py-4",
+        onHome && "relative"
       )}
     >
       <Link
         href={loggedIn ? "/dashboard" : "/"}
         className={cn(
           "font-display text-xl tracking-tight text-ink",
-          hideBrandEmphasis && "opacity-70 transition-opacity hover:opacity-100"
+          onHome && "opacity-70 transition-opacity hover:opacity-100"
         )}
       >
         Agentis
@@ -42,8 +41,9 @@ export function SiteNav() {
               href="/dashboard"
               className={cn(
                 "text-ink/60 hover:text-ink",
-                (pathname.startsWith("/dashboard") || pathname.startsWith("/agora")) &&
+                (pathname.startsWith("/dashboard") || pathname.startsWith("/gathering")) &&
                   !pathname.includes("/guild") &&
+                  !pathname.includes("/profile") &&
                   "font-medium text-ink"
               )}
             >

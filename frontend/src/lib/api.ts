@@ -6,7 +6,7 @@ export type SessionStatus = "active" | "paused" | "completed";
 export type ParticipantKind = "human" | "internal_agent" | "external_agent";
 export type SessionNature = "training" | "multi_agent";
 export type AgentSource = "local" | "downloaded" | "directory";
-export type AgoraMemberRole = "owner" | "member";
+export type GatheringMemberRole = "owner" | "member";
 export type GuildTab = "local" | "downloaded" | "directory";
 
 export type EventType =
@@ -67,7 +67,13 @@ export interface User {
   id: string;
   email: string;
   display_name: string;
+  bio?: string | null;
+  organization?: string | null;
+  title?: string | null;
+  avatar_url?: string | null;
+  profile?: Record<string, unknown>;
   created_at: string;
+  updated_at?: string | null;
 }
 
 export interface AuthResponse {
@@ -89,11 +95,16 @@ export interface Agent {
   source?: AgentSource;
   is_public?: boolean;
   owner_user_id?: string | null;
+  version?: string | null;
+  tags?: string[];
+  notes?: string | null;
+  metadata?: Record<string, unknown>;
   created_at: string;
+  updated_at?: string | null;
   downloaded?: boolean;
 }
 
-export interface Agora {
+export interface Gathering {
   id: string;
   name: string;
   description: string | null;
@@ -102,21 +113,24 @@ export interface Agora {
   member_count: number;
   agent_count: number;
   session_count: number;
-  role?: AgoraMemberRole | null;
+  role?: GatheringMemberRole | null;
 }
 
-export interface AgoraMember {
+export interface GatheringMember {
   id: string;
-  agora_id: string;
+  gathering_id: string;
   user_id: string | null;
   invited_email: string | null;
-  role: AgoraMemberRole;
+  role: GatheringMemberRole;
   display_name?: string | null;
   email?: string | null;
+  bio?: string | null;
+  organization?: string | null;
+  title?: string | null;
   created_at: string;
 }
 
-export interface AgoraSessionSummary {
+export interface GatheringSessionSummary {
   id: string;
   title: string;
   status: SessionStatus;
@@ -126,10 +140,10 @@ export interface AgoraSessionSummary {
   share_url?: string | null;
 }
 
-export interface AgoraDetail extends Agora {
-  members: AgoraMember[];
+export interface GatheringDetail extends Gathering {
+  members: GatheringMember[];
   agents: Agent[];
-  sessions: AgoraSessionSummary[];
+  sessions: GatheringSessionSummary[];
 }
 
 export interface Participant {
@@ -164,7 +178,7 @@ export interface Session {
   title: string;
   status: SessionStatus;
   nature?: SessionNature;
-  agora_id?: string | null;
+  gathering_id?: string | null;
   active_participant_id: string | null;
   created_at: string;
   share_url?: string | null;
@@ -180,7 +194,7 @@ export interface SessionCreateResponse {
   title: string;
   status: SessionStatus;
   nature?: SessionNature;
-  agora_id?: string | null;
+  gathering_id?: string | null;
 }
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -221,35 +235,46 @@ export const api = {
   login: (body: { email: string; password: string }) =>
     request<AuthResponse>("/auth/login", { method: "POST", body: JSON.stringify(body) }),
   me: () => request<User>("/auth/me", undefined, true),
+  updateMe: (body: {
+    display_name?: string;
+    bio?: string;
+    organization?: string;
+    title?: string;
+    avatar_url?: string;
+    profile?: Record<string, unknown>;
+  }) =>
+    request<User>("/auth/me", { method: "PATCH", body: JSON.stringify(body) }, true),
+  getPerson: (userId: string) =>
+    request<User>(`/auth/people/${userId}`, undefined, true),
 
-  listAgoras: () => request<Agora[]>("/agoras", undefined, true),
-  createAgora: (body: { name: string; description?: string }) =>
-    request<Agora>("/agoras", { method: "POST", body: JSON.stringify(body) }, true),
-  getAgora: (id: string) => request<AgoraDetail>(`/agoras/${id}`, undefined, true),
-  inviteToAgora: (id: string, email: string) =>
-    request<AgoraMember>(
-      `/agoras/${id}/invite`,
+  listGatherings: () => request<Gathering[]>("/gatherings", undefined, true),
+  createGathering: (body: { name: string; description?: string }) =>
+    request<Gathering>("/gatherings", { method: "POST", body: JSON.stringify(body) }, true),
+  getGathering: (id: string) => request<GatheringDetail>(`/gatherings/${id}`, undefined, true),
+  inviteToGathering: (id: string, email: string) =>
+    request<GatheringMember>(
+      `/gatherings/${id}/invite`,
       { method: "POST", body: JSON.stringify({ email }) },
       true
     ),
-  addAgentsToAgora: (id: string, agent_ids: string[]) =>
+  addAgentsToGathering: (id: string, agent_ids: string[]) =>
     request<Agent[]>(
-      `/agoras/${id}/agents`,
+      `/gatherings/${id}/agents`,
       { method: "POST", body: JSON.stringify({ agent_ids }) },
       true
     ),
-  createAgoraSession: (
+  createGatheringSession: (
     id: string,
     body: { title: string; nature: SessionNature; agent_ids?: string[] }
   ) =>
     request<SessionCreateResponse>(
-      `/agoras/${id}/sessions`,
+      `/gatherings/${id}/sessions`,
       { method: "POST", body: JSON.stringify(body) },
       true
     ),
-  openAgoraSession: (agoraId: string, sessionId: string) =>
+  openGatheringSession: (gatheringId: string, sessionId: string) =>
     request<SessionCreateResponse>(
-      `/agoras/${agoraId}/sessions/${sessionId}/open`,
+      `/gatherings/${gatheringId}/sessions/${sessionId}/open`,
       { method: "POST" },
       true
     ),
@@ -259,6 +284,25 @@ export const api = {
     if (q?.trim()) params.set("q", q.trim());
     return request<Agent[]>(`/guild/agents?${params}`, undefined, true);
   },
+  getGuildAgent: (agentId: string) =>
+    request<Agent>(`/guild/agents/${agentId}`, undefined, true),
+  updateGuildAgent: (
+    agentId: string,
+    body: {
+      name?: string;
+      description?: string | null;
+      version?: string | null;
+      tags?: string[];
+      notes?: string | null;
+      metadata?: Record<string, unknown>;
+      endpoint_url?: string | null;
+      capabilities?: string[];
+    }
+  ) =>
+    request<Agent>(`/guild/agents/${agentId}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }, true),
   createLocalAgent: (body: {
     name: string;
     agent_key: string;
@@ -267,6 +311,10 @@ export const api = {
     endpoint_url?: string | null;
     description?: string | null;
     capabilities?: string[];
+    version?: string | null;
+    tags?: string[];
+    notes?: string | null;
+    metadata?: Record<string, unknown>;
   }) =>
     request<Agent>("/guild/agents/local", { method: "POST", body: JSON.stringify(body) }, true),
   downloadAgent: (agentId: string) =>

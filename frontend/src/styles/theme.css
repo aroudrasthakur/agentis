@@ -1,0 +1,45 @@
+/**
+ * Agentis design tokens — single source of truth for the universal dark theme.
+ * Channel values are space-separated RGB so Tailwind opacity modifiers work:
+ *   text-ink/55 → rgb(var(--ink) / 0.55)
+ */
+:root {
+  color-scheme: dark;
+
+  /* Foreground */
+  --ink: 237 245 244;
+  --ink-strong: 255 255 255;
+
+  /* Surfaces */
+  --sand: 15 27 29;
+  --mist: 22 36 38;
+  --surface: 18 32 34;
+  --surface-elevated: 24 40 42;
+
+  /* Accents */
+  --teal: 22 143 137;
+  --teal-soft: 20 58 58;
+  --teal-deep: 122 213 207;
+  --coral: 227 120 99;
+  --coral-soft: 58 32 28;
+  --coral-deep: 227 149 130;
+
+  /* Canvas / shell */
+  --bg0: 7 16 17;
+  --bg1: 10 20 22;
+  --bg2: 13 23 25;
+  --glow-teal: 45 184 177;
+  --glow-ink: 255 255 255;
+
+  /* Panel chrome */
+  --panel-bg: rgb(var(--sand) / 0.78);
+  --panel-border: rgb(var(--ink) / 0.09);
+  --panel-highlight: rgb(var(--ink) / 0.025);
+  --panel-shadow: 0 24px 70px rgb(0 0 0 / 0.18);
+  --grid-line: rgb(var(--ink) / 0.045);
+  --nav-border: rgb(var(--ink) / 0.05);
+  --scrim: 0 0 0;
+
+  /* Radius */
+  --radius-panel: 1.5rem;
+}

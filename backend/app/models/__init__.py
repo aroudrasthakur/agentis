@@ -68,7 +68,7 @@ class AgentSource(str, enum.Enum):
     directory = "directory"
 
 
-class AgoraMemberRole(str, enum.Enum):
+class GatheringMemberRole(str, enum.Enum):
     owner = "owner"
     member = "member"
 
@@ -95,27 +95,41 @@ session_nature_enum = Enum(
 agent_source_enum = Enum(
     AgentSource, name="agent_source", values_callable=lambda x: [e.value for e in x]
 )
-agora_member_role_enum = Enum(
-    AgoraMemberRole, name="agora_member_role", values_callable=lambda x: [e.value for e in x]
+gathering_member_role_enum = Enum(
+    GatheringMemberRole,
+    name="gathering_member_role",
+    values_callable=lambda x: [e.value for e in x],
 )
 
 
 class User(Base):
+    """Person account + stored profile information."""
+
     __tablename__ = "users"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     email: Mapped[str] = mapped_column(String(320), unique=True, nullable=False, index=True)
     display_name: Mapped[str] = mapped_column(String(255), nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    bio: Mapped[str | None] = mapped_column(Text, nullable=True)
+    organization: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    avatar_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    profile: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
-    owned_agoras: Mapped[list["Agora"]] = relationship(back_populates="owner")
-    memberships: Mapped[list["AgoraMember"]] = relationship(back_populates="user")
+    owned_gatherings: Mapped[list["Gathering"]] = relationship(back_populates="owner")
+    memberships: Mapped[list["GatheringMember"]] = relationship(back_populates="user")
     agents: Mapped[list["Agent"]] = relationship(back_populates="owner")
     downloads: Mapped[list["AgentDownload"]] = relationship(back_populates="user")
 
 
 class Agent(Base):
+    """Agent registry entry + stored agent information."""
+
     __tablename__ = "agents"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -134,11 +148,20 @@ class Agent(Base):
     owner_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
+    version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    tags: Mapped[list[Any]] = mapped_column(JSONB, nullable=False, default=list)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    metadata_: Mapped[dict[str, Any]] = mapped_column(
+        "metadata", JSONB, nullable=False, default=dict
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
     participants: Mapped[list["Participant"]] = relationship(back_populates="agent")
     owner: Mapped[User | None] = relationship(back_populates="agents")
-    agora_links: Mapped[list["AgoraAgent"]] = relationship(back_populates="agent")
+    gathering_links: Mapped[list["GatheringAgent"]] = relationship(back_populates="agent")
     downloads: Mapped[list["AgentDownload"]] = relationship(back_populates="agent")
 
 
@@ -158,8 +181,8 @@ class AgentDownload(Base):
     agent: Mapped[Agent] = relationship(back_populates="downloads")
 
 
-class Agora(Base):
-    __tablename__ = "agoras"
+class Gathering(Base):
+    __tablename__ = "gatherings"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -169,50 +192,50 @@ class Agora(Base):
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    owner: Mapped[User] = relationship(back_populates="owned_agoras")
-    members: Mapped[list["AgoraMember"]] = relationship(
-        back_populates="agora", cascade="all, delete-orphan"
+    owner: Mapped[User] = relationship(back_populates="owned_gatherings")
+    members: Mapped[list["GatheringMember"]] = relationship(
+        back_populates="gathering", cascade="all, delete-orphan"
     )
-    agents: Mapped[list["AgoraAgent"]] = relationship(
-        back_populates="agora", cascade="all, delete-orphan"
+    agents: Mapped[list["GatheringAgent"]] = relationship(
+        back_populates="gathering", cascade="all, delete-orphan"
     )
-    sessions: Mapped[list["Session"]] = relationship(back_populates="agora")
+    sessions: Mapped[list["Session"]] = relationship(back_populates="gathering")
 
 
-class AgoraMember(Base):
-    __tablename__ = "agora_members"
+class GatheringMember(Base):
+    __tablename__ = "gathering_members"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    agora_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("agoras.id", ondelete="CASCADE"), nullable=False
+    gathering_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("gatherings.id", ondelete="CASCADE"), nullable=False
     )
     user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=True
     )
     invited_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
-    role: Mapped[AgoraMemberRole] = mapped_column(
-        agora_member_role_enum, default=AgoraMemberRole.member, nullable=False
+    role: Mapped[GatheringMemberRole] = mapped_column(
+        gathering_member_role_enum, default=GatheringMemberRole.member, nullable=False
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    agora: Mapped[Agora] = relationship(back_populates="members")
+    gathering: Mapped[Gathering] = relationship(back_populates="members")
     user: Mapped[User | None] = relationship(back_populates="memberships")
 
 
-class AgoraAgent(Base):
-    __tablename__ = "agora_agents"
+class GatheringAgent(Base):
+    __tablename__ = "gathering_agents"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    agora_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("agoras.id", ondelete="CASCADE"), nullable=False
+    gathering_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("gatherings.id", ondelete="CASCADE"), nullable=False
     )
     agent_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("agents.id", ondelete="CASCADE"), nullable=False
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    agora: Mapped[Agora] = relationship(back_populates="agents")
-    agent: Mapped[Agent] = relationship(back_populates="agora_links")
+    gathering: Mapped[Gathering] = relationship(back_populates="agents")
+    agent: Mapped[Agent] = relationship(back_populates="gathering_links")
 
 
 class Session(Base):
@@ -226,15 +249,15 @@ class Session(Base):
     nature: Mapped[SessionNature] = mapped_column(
         session_nature_enum, default=SessionNature.multi_agent, nullable=False
     )
-    agora_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("agoras.id", ondelete="SET NULL"), nullable=True
+    gathering_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("gatherings.id", ondelete="SET NULL"), nullable=True
     )
     active_participant_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     invite_jti: Mapped[str | None] = mapped_column(String(64), nullable=True)
     invite_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    agora: Mapped[Agora | None] = relationship(back_populates="sessions")
+    gathering: Mapped[Gathering | None] = relationship(back_populates="sessions")
     participants: Mapped[list["Participant"]] = relationship(
         back_populates="session",
         cascade="all, delete-orphan",

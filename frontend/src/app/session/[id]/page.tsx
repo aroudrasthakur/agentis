@@ -122,7 +122,7 @@ function SessionRoom() {
         </div>
       </div>
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden rounded-xl border border-ink/10 bg-white/30 md:grid-cols-[1fr_280px]">
+      <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden rounded-xl border border-ink/10 bg-surface/30 md:grid-cols-[1fr_280px]">
         <div className="flex min-h-0 flex-col">
           <div className="min-h-0 flex-1 p-4">
             <Timeline events={session.events} />

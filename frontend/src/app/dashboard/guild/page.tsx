@@ -36,6 +36,8 @@ export default function GuildPage() {
   const [key, setKey] = useState("");
   const [mode, setMode] = useState<HostingMode>("hosted");
   const [endpoint, setEndpoint] = useState("");
+  const [version, setVersion] = useState("");
+  const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -68,11 +70,15 @@ export default function GuildPage() {
         agent_key: key,
         hosting_mode: mode,
         endpoint_url: mode === "remote_mcp" ? endpoint : null,
+        version: version.trim() || null,
+        notes: notes.trim() || null,
       });
       setLocalOpen(false);
       setName("");
       setKey("");
       setEndpoint("");
+      setVersion("");
+      setNotes("");
       setTab("local");
       await load();
     } catch (err) {
@@ -123,7 +129,7 @@ export default function GuildPage() {
                   onChange={(e) => setKey(e.target.value)}
                 />
                 <select
-                  className="w-full rounded-md border border-ink/15 bg-white px-3 py-2 text-sm"
+                  className="w-full rounded-md border border-ink/15 bg-surface px-3 py-2 text-sm"
                   value={mode}
                   onChange={(e) => setMode(e.target.value as HostingMode)}
                 >
@@ -137,6 +143,16 @@ export default function GuildPage() {
                     onChange={(e) => setEndpoint(e.target.value)}
                   />
                 )}
+                <Input
+                  placeholder="Version (optional)"
+                  value={version}
+                  onChange={(e) => setVersion(e.target.value)}
+                />
+                <Input
+                  placeholder="Notes / training info (optional)"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                />
                 <Button
                   variant="teal"
                   className="w-full"
@@ -186,7 +202,7 @@ export default function GuildPage() {
           {agents.map((agent) => (
             <li
               key={agent.id}
-              className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-ink/10 bg-white/70 px-4 py-4"
+              className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-ink/10 bg-surface/70 px-4 py-4"
             >
               <div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -196,9 +212,15 @@ export default function GuildPage() {
                     <Badge className="bg-teal-soft text-teal-deep">{agent.source}</Badge>
                   )}
                 </div>
-                <p className="mt-1 text-xs text-ink/45">{agent.agent_key}</p>
+                <p className="mt-1 text-xs text-ink/45">
+                  {agent.agent_key}
+                  {agent.version ? ` · v${agent.version}` : ""}
+                </p>
                 {agent.description && (
                   <p className="mt-2 max-w-2xl text-sm text-ink/60">{agent.description}</p>
+                )}
+                {agent.notes && (
+                  <p className="mt-1 max-w-2xl text-xs text-ink/45">{agent.notes}</p>
                 )}
               </div>
               {tab === "directory" && (

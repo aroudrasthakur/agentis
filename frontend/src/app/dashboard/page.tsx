@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import type { Agora } from "@/lib/api";
+import type { Gathering } from "@/lib/api";
 import { api } from "@/lib/api";
 import { clearAuth, getStoredUser, isLoggedIn } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,7 @@ import {
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [agoras, setAgoras] = useState<Agora[]>([]);
+  const [gatherings, setGatherings] = useState<Gathering[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -33,29 +33,28 @@ export default function DashboardPage() {
     }
     void (async () => {
       try {
-        const list = await api.listAgoras();
-        setAgoras(list);
+        setGatherings(await api.listGatherings());
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load agoras");
+        setError(err instanceof Error ? err.message : "Failed to load gatherings");
       }
     })();
   }, [router]);
 
-  async function createAgora() {
+  async function createGathering() {
     if (!name.trim()) return;
     setBusy(true);
     setError(null);
     try {
-      const agora = await api.createAgora({
+      const gathering = await api.createGathering({
         name: name.trim(),
         description: description.trim() || undefined,
       });
       setOpen(false);
       setName("");
       setDescription("");
-      router.push(`/agora/${agora.id}`);
+      router.push(`/gathering/${gathering.id}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create agora");
+      setError(err instanceof Error ? err.message : "Failed to create gathering");
       setBusy(false);
     }
   }
@@ -66,7 +65,7 @@ export default function DashboardPage() {
         <div>
           <p className="text-[11px] uppercase tracking-[0.22em] text-ink/40">Dashboard</p>
           <h1 className="mt-1 font-display text-4xl tracking-tight text-ink">
-            Your Agoras
+            Your Gatherings
           </h1>
           <p className="mt-2 max-w-lg text-sm text-ink/55">
             Workspaces for training agents and multi-agent sessions.
@@ -74,16 +73,19 @@ export default function DashboardPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Link href="/dashboard/profile">
+            <Button variant="outline">Profile</Button>
+          </Link>
           <Link href="/dashboard/guild">
             <Button variant="outline">Guild</Button>
           </Link>
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <Button variant="teal">New Agora</Button>
+              <Button variant="teal">New Gathering</Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Create agora</DialogTitle>
+                <DialogTitle>Create gathering</DialogTitle>
               </DialogHeader>
               <div className="mt-3 space-y-3">
                 <Input
@@ -100,7 +102,7 @@ export default function DashboardPage() {
                   variant="teal"
                   className="w-full"
                   disabled={busy || !name.trim()}
-                  onClick={() => void createAgora()}
+                  onClick={() => void createGathering()}
                 >
                   {busy ? "Creating…" : "Create"}
                 </Button>
@@ -121,31 +123,33 @@ export default function DashboardPage() {
 
       {error && <p className="mb-4 text-sm text-coral">{error}</p>}
 
-      {agoras.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-ink/15 bg-white/50 px-8 py-16 text-center">
-          <p className="font-display text-2xl text-ink">No agoras yet</p>
+      {gatherings.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-ink/15 bg-surface/50 px-8 py-16 text-center">
+          <p className="font-display text-2xl text-ink">No gatherings yet</p>
           <p className="mt-2 text-sm text-ink/50">
             Create a workspace, invite people, and add agents from the Guild.
           </p>
           <Button className="mt-6" variant="teal" onClick={() => setOpen(true)}>
-            Create your first agora
+            Create your first gathering
           </Button>
         </div>
       ) : (
         <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {agoras.map((agora) => (
-            <li key={agora.id}>
+          {gatherings.map((gathering) => (
+            <li key={gathering.id}>
               <Link
-                href={`/agora/${agora.id}`}
-                className="block rounded-xl border border-ink/10 bg-white/70 px-5 py-5 transition hover:border-teal/40 hover:bg-white"
+                href={`/gathering/${gathering.id}`}
+                className="block rounded-xl border border-ink/10 bg-surface/70 px-5 py-5 transition hover:border-teal/40 hover:bg-surface"
               >
-                <h2 className="font-display text-xl text-ink">{agora.name}</h2>
-                {agora.description && (
-                  <p className="mt-1 line-clamp-2 text-sm text-ink/50">{agora.description}</p>
+                <h2 className="font-display text-xl text-ink">{gathering.name}</h2>
+                {gathering.description && (
+                  <p className="mt-1 line-clamp-2 text-sm text-ink/50">
+                    {gathering.description}
+                  </p>
                 )}
                 <p className="mt-4 text-[11px] uppercase tracking-[0.16em] text-ink/35">
-                  {agora.session_count} sessions · {agora.agent_count} agents ·{" "}
-                  {agora.member_count} people
+                  {gathering.session_count} sessions · {gathering.agent_count} agents ·{" "}
+                  {gathering.member_count} people
                 </p>
               </Link>
             </li>

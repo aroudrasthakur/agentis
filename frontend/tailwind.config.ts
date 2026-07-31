@@ -9,47 +9,63 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        ink: "#0f1c1f",
-        mist: "#e8eef0",
+        ink: "rgb(var(--ink) / <alpha-value>)",
+        mist: "rgb(var(--mist) / <alpha-value>)",
+        sand: "rgb(var(--sand) / <alpha-value>)",
+        surface: "rgb(var(--surface) / <alpha-value>)",
+        "surface-elevated": "rgb(var(--surface-elevated) / <alpha-value>)",
+        scrim: "rgb(var(--scrim) / <alpha-value>)",
         teal: {
-          DEFAULT: "#0d7c7c",
-          soft: "#d4efef",
-          deep: "#095858",
+          DEFAULT: "rgb(var(--teal) / <alpha-value>)",
+          soft: "rgb(var(--teal-soft) / <alpha-value>)",
+          deep: "rgb(var(--teal-deep) / <alpha-value>)",
         },
         coral: {
-          DEFAULT: "#d45d4a",
-          soft: "#f8e4df",
-          deep: "#a84030",
+          DEFAULT: "rgb(var(--coral) / <alpha-value>)",
+          soft: "rgb(var(--coral-soft) / <alpha-value>)",
+          deep: "rgb(var(--coral-deep) / <alpha-value>)",
         },
-        sand: "#f3f1ec",
       },
       fontFamily: {
         display: ["var(--font-display)", "Georgia", "serif"],
         sans: ["var(--font-sans)", "system-ui", "sans-serif"],
       },
+      borderRadius: {
+        panel: "var(--radius-panel)",
+      },
       keyframes: {
         "fade-up": {
-          "0%": { opacity: "0", transform: "translateY(8px)" },
+          "0%": { opacity: "0", transform: "translateY(12px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
         },
-        "mesh-pulse": {
-          "0%, 100%": { opacity: "0.35", transform: "scale(1)" },
-          "50%": { opacity: "0.9", transform: "scale(1.08)" },
+        "soft-pulse": {
+          "0%, 100%": { opacity: "0.45" },
+          "50%": { opacity: "1" },
         },
-        "mesh-draw": {
-          "0%": { strokeDashoffset: "120" },
-          "100%": { strokeDashoffset: "0" },
+        "line-draw": {
+          "0%": { transform: "scaleX(0)" },
+          "100%": { transform: "scaleX(1)" },
         },
-        "mesh-float": {
+        "agent-float": {
           "0%, 100%": { transform: "translateY(0)" },
-          "50%": { transform: "translateY(-6px)" },
+          "50%": { transform: "translateY(-4px)" },
+        },
+        "grid-drift": {
+          "0%": { backgroundPosition: "0 0, 0 0" },
+          "100%": { backgroundPosition: "48px 48px, 48px 48px" },
+        },
+        "timeline-in": {
+          "0%": { opacity: "0", transform: "translateX(-8px)" },
+          "100%": { opacity: "1", transform: "translateX(0)" },
         },
       },
       animation: {
-        "fade-up": "fade-up 0.35s ease-out",
-        "mesh-pulse": "mesh-pulse 3.6s ease-in-out infinite",
-        "mesh-draw": "mesh-draw 1.8s ease-out forwards",
-        "mesh-float": "mesh-float 7s ease-in-out infinite",
+        "fade-up": "fade-up 0.55s ease-out both",
+        "soft-pulse": "soft-pulse 2.4s ease-in-out infinite",
+        "line-draw": "line-draw 0.8s ease-out both",
+        "agent-float": "agent-float 5.5s ease-in-out infinite",
+        "grid-drift": "grid-drift 60s linear infinite",
+        "timeline-in": "timeline-in 0.45s ease-out both",
       },
     },
   },

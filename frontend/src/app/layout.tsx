@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Fraunces, DM_Sans } from "next/font/google";
+import "@/styles/theme.css";
 import "./globals.css";
 import { SiteNav } from "@/components/SiteNav";
 
@@ -14,9 +15,9 @@ const sans = DM_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Agentis — multi-agent collaboration",
+  title: "Agentis — the operating system for AI teams",
   description:
-    "Humans and agents in one live session, with human-in-the-loop oversight that stays in the room.",
+    "Humans and specialized AI agents collaborate in one persistent workspace where every action, decision, and approval remains visible.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

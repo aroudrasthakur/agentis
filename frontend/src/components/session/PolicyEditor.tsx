@@ -77,7 +77,7 @@ export function PolicyEditor({ actionType = "process_refund" }: { actionType?: s
       <label className="block text-xs text-ink/60">
         Mode
         <select
-          className="mt-1 w-full rounded-md border border-ink/15 bg-white px-2 py-1.5 text-sm text-ink"
+          className="mt-1 w-full rounded-md border border-ink/15 bg-surface px-2 py-1.5 text-sm text-ink"
           value={mode}
           onChange={(e) => setMode(e.target.value as ActionPolicyMode)}
         >

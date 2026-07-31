@@ -35,7 +35,7 @@ export function ParticipantsPanel({
   const available = agents.filter((a) => a.is_active && !attachedAgentIds.has(a.id));
 
   return (
-    <aside className="flex h-full flex-col gap-4 border-l border-ink/10 bg-white/40 p-4">
+    <aside className="flex h-full flex-col gap-4 border-l border-ink/10 bg-surface/40 p-4">
       <div>
         <h2 className="font-display text-lg text-ink">Participants</h2>
         <p className="text-xs text-ink/50">Humans and attached agents</p>
@@ -45,7 +45,7 @@ export function ParticipantsPanel({
           <li
             key={p.id}
             className={cn(
-              "rounded-lg border border-ink/10 bg-white/80 px-3 py-2",
+              "rounded-lg border border-ink/10 bg-surface/80 px-3 py-2",
               activeParticipantId === p.id && "ring-2 ring-teal"
             )}
           >
@@ -145,7 +145,7 @@ function AttachAgentDialog({
                     }
                     className={cn(
                       "flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left",
-                      checked ? "border-teal bg-teal-soft/40" : "border-ink/10 bg-white"
+                      checked ? "border-teal bg-teal-soft/40" : "border-ink/10 bg-surface"
                     )}
                   >
                     <span>

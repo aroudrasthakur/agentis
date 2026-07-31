@@ -73,7 +73,7 @@ function EventBubble({ event }: { event: SessionEvent }) {
           event.type !== "action_denied" &&
           event.type !== "plan_approved" &&
           event.type !== "plan_denied" &&
-          "bg-white/70",
+          "bg-surface/70",
         systemish && "border border-dashed border-ink/15 bg-transparent"
       )}
     >

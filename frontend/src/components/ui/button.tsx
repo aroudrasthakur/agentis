@@ -9,9 +9,10 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default: "bg-ink text-sand hover:bg-ink/90",
-        teal: "bg-teal text-white hover:bg-teal-deep",
-        coral: "bg-coral text-white hover:bg-coral-deep",
-        outline: "border border-ink/15 bg-white/60 hover:bg-white text-ink",
+        teal: "bg-teal text-white hover:bg-teal/90",
+        coral: "bg-coral text-white hover:bg-coral/90",
+        outline:
+          "border border-ink/15 bg-surface/60 hover:bg-surface text-ink",
         ghost: "hover:bg-ink/5 text-ink",
       },
       size: {

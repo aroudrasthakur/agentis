@@ -40,7 +40,7 @@ export function ControlBar({
   const [starting, setStarting] = useState(false);
 
   return (
-    <div className="flex flex-wrap items-center gap-2 border-t border-ink/10 bg-white/50 px-4 py-3">
+    <div className="flex flex-wrap items-center gap-2 border-t border-ink/10 bg-surface/50 px-4 py-3">
       <Button
         size="sm"
         variant="outline"

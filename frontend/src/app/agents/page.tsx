@@ -67,7 +67,7 @@ export default function AgentsPage() {
         </p>
       </div>
 
-      <section className="mb-10 rounded-xl border border-ink/10 bg-white/60 p-5">
+      <section className="mb-10 rounded-xl border border-ink/10 bg-surface/60 p-5">
         <h2 className="mb-4 font-display text-xl">Register agent</h2>
         <form onSubmit={register} className="grid gap-3 md:grid-cols-2">
           <Input
@@ -82,7 +82,7 @@ export default function AgentsPage() {
             onChange={(e) => setAgentKey(e.target.value)}
           />
           <select
-            className="h-10 rounded-md border border-ink/15 bg-white/80 px-3 text-sm"
+            className="h-10 rounded-md border border-ink/15 bg-surface/80 px-3 text-sm"
             value={mode}
             onChange={(e) => {
               const next = e.target.value as HostingMode;
@@ -94,7 +94,7 @@ export default function AgentsPage() {
             <option value="hosted">Hosted (in-app)</option>
           </select>
           <select
-            className="h-10 rounded-md border border-ink/15 bg-white/80 px-3 text-sm"
+            className="h-10 rounded-md border border-ink/15 bg-surface/80 px-3 text-sm"
             value={orgTag}
             onChange={(e) => setOrgTag(e.target.value as OrgTag)}
           >
@@ -129,7 +129,7 @@ export default function AgentsPage() {
         {agents.map((agent) => (
           <article
             key={agent.id}
-            className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-ink/10 bg-white/70 px-4 py-3 animate-fade-up"
+            className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-ink/10 bg-surface/70 px-4 py-3 animate-fade-up"
           >
             <div>
               <h3 className="font-semibold text-ink">{agent.name}</h3>

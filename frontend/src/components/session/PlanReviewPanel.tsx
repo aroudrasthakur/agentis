@@ -49,7 +49,7 @@ export function PlanReviewPanel({
   }
 
   return (
-    <div className="mx-4 mb-3 rounded-lg border border-ink/15 bg-white/80 p-4 animate-fade-up">
+    <div className="mx-4 mb-3 rounded-lg border border-ink/15 bg-surface/80 p-4 animate-fade-up">
       <div className="mb-2 flex items-baseline justify-between gap-2">
         <h2 className="font-display text-lg text-ink">{plan.title || "Proposed plan"}</h2>
         <span className="text-[10px] uppercase tracking-wider text-ink/40">plan review</span>

@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -7,15 +8,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import get_db
 from app.deps import get_current_user
 from app.models import Agent, AgentDownload, AgentSource, HostingMode, User
-from app.schemas import AgentOut, LocalAgentCreate
+from app.schemas import AgentOut, AgentUpdate, LocalAgentCreate
 
 router = APIRouter(prefix="/guild", tags=["guild"])
 
 
 def _agent_out(agent: Agent, *, downloaded: bool = False) -> AgentOut:
-    data = AgentOut.model_validate(agent)
-    data.downloaded = downloaded
-    return data
+    return AgentOut.from_agent(agent, downloaded=downloaded)
 
 
 @router.get("/agents", response_model=list[AgentOut])
@@ -25,12 +24,6 @@ async def list_guild_agents(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[AgentOut]:
-    """
-    Guild inventory:
-    - local: private agents owned by the current user
-    - downloaded: agents the user downloaded from the directory
-    - directory: publicly posted agents (optional search)
-    """
     query_text = (q or "").strip().lower()
 
     if tab == "local":
@@ -66,7 +59,6 @@ async def list_guild_agents(
         result = await db.execute(stmt.order_by(AgentDownload.created_at.desc()))
         return [_agent_out(a, downloaded=True) for a in result.scalars().all()]
 
-    # directory
     stmt = select(Agent).where(Agent.is_public.is_(True), Agent.is_active.is_(True))
     if query_text:
         stmt = stmt.where(
@@ -90,6 +82,55 @@ async def list_guild_agents(
         downloaded_ids = set(dl.scalars().all())
 
     return [_agent_out(a, downloaded=a.id in downloaded_ids) for a in agents]
+
+
+@router.get("/agents/{agent_id}", response_model=AgentOut)
+async def get_agent_info(
+    agent_id: UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> AgentOut:
+    agent = await db.get(Agent, agent_id)
+    if not agent or not agent.is_active:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    # Visible if public, owned, or downloaded
+    if not agent.is_public and agent.owner_user_id != user.id:
+        dl = await db.execute(
+            select(AgentDownload).where(
+                AgentDownload.user_id == user.id, AgentDownload.agent_id == agent_id
+            )
+        )
+        if not dl.scalar_one_or_none():
+            raise HTTPException(status_code=403, detail="Not allowed to view this agent")
+    downloaded = False
+    dl = await db.execute(
+        select(AgentDownload).where(
+            AgentDownload.user_id == user.id, AgentDownload.agent_id == agent_id
+        )
+    )
+    downloaded = dl.scalar_one_or_none() is not None
+    return _agent_out(agent, downloaded=downloaded)
+
+
+@router.patch("/agents/{agent_id}", response_model=AgentOut)
+async def update_agent_info(
+    agent_id: UUID,
+    payload: AgentUpdate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> AgentOut:
+    agent = await db.get(Agent, agent_id)
+    if not agent or agent.owner_user_id != user.id:
+        raise HTTPException(status_code=404, detail="Owned agent not found")
+    data = payload.model_dump(exclude_unset=True)
+    if "metadata" in data:
+        agent.metadata_ = data.pop("metadata") or {}
+    for key, value in data.items():
+        setattr(agent, key, value)
+    agent.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(agent)
+    return _agent_out(agent)
 
 
 @router.post(
@@ -120,6 +161,10 @@ async def create_local_agent(
         source=AgentSource.local,
         is_public=False,
         owner_user_id=user.id,
+        version=payload.version,
+        tags=list(payload.tags or []),
+        notes=payload.notes,
+        metadata_=dict(payload.metadata or {}),
     )
     db.add(agent)
     await db.commit()

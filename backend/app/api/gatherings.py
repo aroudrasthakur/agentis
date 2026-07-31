@@ -9,10 +9,10 @@ from app.db import get_db
 from app.deps import get_current_user
 from app.models import (
     Agent,
-    Agora,
-    AgoraAgent,
-    AgoraMember,
-    AgoraMemberRole,
+    Gathering,
+    GatheringAgent,
+    GatheringMember,
+    GatheringMemberRole,
     OrgTag,
     Participant,
     ParticipantKind,
@@ -21,15 +21,15 @@ from app.models import (
     User,
 )
 from app.schemas import (
-    AgoraAddAgentsRequest,
-    AgoraCreate,
-    AgoraDetailOut,
-    AgoraInviteRequest,
-    AgoraMemberOut,
-    AgoraOut,
-    AgoraSessionCreate,
-    AgoraSessionSummary,
     AgentOut,
+    GatheringAddAgentsRequest,
+    GatheringCreate,
+    GatheringDetailOut,
+    GatheringInviteRequest,
+    GatheringMemberOut,
+    GatheringOut,
+    GatheringSessionCreate,
+    GatheringSessionSummary,
     SessionCreateResponse,
 )
 from app.services.auth import get_user_by_email
@@ -39,48 +39,58 @@ from app.services.session_service import (
     session_share_url,
 )
 
-router = APIRouter(prefix="/agoras", tags=["agoras"])
+router = APIRouter(prefix="/gatherings", tags=["gatherings"])
 
 
-async def _require_agora_member(
-    db: AsyncSession, agora_id: UUID, user: User
-) -> tuple[Agora, AgoraMember]:
-    agora = await db.get(Agora, agora_id)
-    if not agora:
-        raise HTTPException(status_code=404, detail="Agora not found")
+async def _require_member(
+    db: AsyncSession, gathering_id: UUID, user: User
+) -> tuple[Gathering, GatheringMember]:
+    gathering = await db.get(Gathering, gathering_id)
+    if not gathering:
+        raise HTTPException(status_code=404, detail="Gathering not found")
     result = await db.execute(
-        select(AgoraMember).where(
-            AgoraMember.agora_id == agora_id, AgoraMember.user_id == user.id
+        select(GatheringMember).where(
+            GatheringMember.gathering_id == gathering_id,
+            GatheringMember.user_id == user.id,
         )
     )
     membership = result.scalar_one_or_none()
     if not membership:
-        raise HTTPException(status_code=403, detail="Not a member of this agora")
-    return agora, membership
+        raise HTTPException(status_code=403, detail="Not a member of this gathering")
+    return gathering, membership
 
 
-async def _counts(db: AsyncSession, agora_id: UUID) -> tuple[int, int, int]:
+async def _counts(db: AsyncSession, gathering_id: UUID) -> tuple[int, int, int]:
     members = await db.scalar(
-        select(func.count()).select_from(AgoraMember).where(AgoraMember.agora_id == agora_id)
+        select(func.count())
+        .select_from(GatheringMember)
+        .where(GatheringMember.gathering_id == gathering_id)
     )
     agents = await db.scalar(
-        select(func.count()).select_from(AgoraAgent).where(AgoraAgent.agora_id == agora_id)
+        select(func.count())
+        .select_from(GatheringAgent)
+        .where(GatheringAgent.gathering_id == gathering_id)
     )
     sessions = await db.scalar(
-        select(func.count()).select_from(Session).where(Session.agora_id == agora_id)
+        select(func.count()).select_from(Session).where(Session.gathering_id == gathering_id)
     )
     return int(members or 0), int(agents or 0), int(sessions or 0)
 
 
-def _agora_out(
-    agora: Agora, *, role: AgoraMemberRole | None, member_count: int, agent_count: int, session_count: int
-) -> AgoraOut:
-    return AgoraOut(
-        id=agora.id,
-        name=agora.name,
-        description=agora.description,
-        owner_id=agora.owner_id,
-        created_at=agora.created_at,
+def _gathering_out(
+    gathering: Gathering,
+    *,
+    role: GatheringMemberRole | None,
+    member_count: int,
+    agent_count: int,
+    session_count: int,
+) -> GatheringOut:
+    return GatheringOut(
+        id=gathering.id,
+        name=gathering.name,
+        description=gathering.description,
+        owner_id=gathering.owner_id,
+        created_at=gathering.created_at,
         member_count=member_count,
         agent_count=agent_count,
         session_count=session_count,
@@ -88,130 +98,142 @@ def _agora_out(
     )
 
 
-@router.get("", response_model=list[AgoraOut])
-async def list_agoras(
+@router.get("", response_model=list[GatheringOut])
+async def list_gatherings(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> list[AgoraOut]:
+) -> list[GatheringOut]:
     result = await db.execute(
-        select(Agora, AgoraMember.role)
-        .join(AgoraMember, AgoraMember.agora_id == Agora.id)
-        .where(AgoraMember.user_id == user.id)
-        .order_by(Agora.created_at.desc())
+        select(Gathering, GatheringMember.role)
+        .join(GatheringMember, GatheringMember.gathering_id == Gathering.id)
+        .where(GatheringMember.user_id == user.id)
+        .order_by(Gathering.created_at.desc())
     )
-    rows = result.all()
-    out: list[AgoraOut] = []
-    for agora, role in rows:
-        mc, ac, sc = await _counts(db, agora.id)
+    out: list[GatheringOut] = []
+    for gathering, role in result.all():
+        mc, ac, sc = await _counts(db, gathering.id)
         out.append(
-            _agora_out(agora, role=role, member_count=mc, agent_count=ac, session_count=sc)
+            _gathering_out(
+                gathering, role=role, member_count=mc, agent_count=ac, session_count=sc
+            )
         )
     return out
 
 
-@router.post("", response_model=AgoraOut, status_code=status.HTTP_201_CREATED)
-async def create_agora(
-    payload: AgoraCreate,
+@router.post("", response_model=GatheringOut, status_code=status.HTTP_201_CREATED)
+async def create_gathering(
+    payload: GatheringCreate,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> AgoraOut:
+) -> GatheringOut:
     name = payload.name.strip()
     if not name:
         raise HTTPException(status_code=400, detail="Name is required")
-    agora = Agora(name=name, description=payload.description, owner_id=user.id)
-    db.add(agora)
+    gathering = Gathering(name=name, description=payload.description, owner_id=user.id)
+    db.add(gathering)
     await db.flush()
     db.add(
-        AgoraMember(
-            agora_id=agora.id,
+        GatheringMember(
+            gathering_id=gathering.id,
             user_id=user.id,
             invited_email=user.email,
-            role=AgoraMemberRole.owner,
+            role=GatheringMemberRole.owner,
         )
     )
     await db.commit()
-    await db.refresh(agora)
-    return _agora_out(
-        agora, role=AgoraMemberRole.owner, member_count=1, agent_count=0, session_count=0
+    await db.refresh(gathering)
+    return _gathering_out(
+        gathering,
+        role=GatheringMemberRole.owner,
+        member_count=1,
+        agent_count=0,
+        session_count=0,
     )
 
 
-@router.get("/{agora_id}", response_model=AgoraDetailOut)
-async def get_agora(
-    agora_id: UUID,
+@router.get("/{gathering_id}", response_model=GatheringDetailOut)
+async def get_gathering(
+    gathering_id: UUID,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> AgoraDetailOut:
-    agora, membership = await _require_agora_member(db, agora_id, user)
+) -> GatheringDetailOut:
+    gathering, membership = await _require_member(db, gathering_id, user)
 
     members_result = await db.execute(
-        select(AgoraMember)
-        .where(AgoraMember.agora_id == agora_id)
-        .options(selectinload(AgoraMember.user))
-        .order_by(AgoraMember.created_at.asc())
+        select(GatheringMember)
+        .where(GatheringMember.gathering_id == gathering_id)
+        .options(selectinload(GatheringMember.user))
+        .order_by(GatheringMember.created_at.asc())
     )
     members = []
     for m in members_result.scalars().all():
         members.append(
-            AgoraMemberOut(
+            GatheringMemberOut(
                 id=m.id,
-                agora_id=m.agora_id,
+                gathering_id=m.gathering_id,
                 user_id=m.user_id,
                 invited_email=m.invited_email,
                 role=m.role,
                 display_name=m.user.display_name if m.user else None,
                 email=m.user.email if m.user else m.invited_email,
+                bio=m.user.bio if m.user else None,
+                organization=m.user.organization if m.user else None,
+                title=m.user.title if m.user else None,
                 created_at=m.created_at,
             )
         )
 
     agents_result = await db.execute(
         select(Agent)
-        .join(AgoraAgent, AgoraAgent.agent_id == Agent.id)
-        .where(AgoraAgent.agora_id == agora_id)
+        .join(GatheringAgent, GatheringAgent.agent_id == Agent.id)
+        .where(GatheringAgent.gathering_id == gathering_id)
         .order_by(Agent.name.asc())
     )
-    agents = [AgentOut.model_validate(a) for a in agents_result.scalars().all()]
+    agents = [AgentOut.from_agent(a) for a in agents_result.scalars().all()]
 
     sessions_result = await db.execute(
-        select(Session).where(Session.agora_id == agora_id).order_by(Session.created_at.desc())
+        select(Session)
+        .where(Session.gathering_id == gathering_id)
+        .order_by(Session.created_at.desc())
     )
     sessions = [
-        AgoraSessionSummary(
+        GatheringSessionSummary(
             id=s.id,
             title=s.title,
             status=s.status,
             nature=s.nature,
             created_at=s.created_at,
-            invite=None,
-            share_url=None,
         )
         for s in sessions_result.scalars().all()
     ]
 
-    mc, ac, sc = await _counts(db, agora_id)
-    base = _agora_out(
-        agora, role=membership.role, member_count=mc, agent_count=ac, session_count=sc
+    mc, ac, sc = await _counts(db, gathering_id)
+    base = _gathering_out(
+        gathering, role=membership.role, member_count=mc, agent_count=ac, session_count=sc
     )
-    return AgoraDetailOut(**base.model_dump(), members=members, agents=agents, sessions=sessions)
+    return GatheringDetailOut(
+        **base.model_dump(), members=members, agents=agents, sessions=sessions
+    )
 
 
-@router.post("/{agora_id}/invite", response_model=AgoraMemberOut)
-async def invite_to_agora(
-    agora_id: UUID,
-    payload: AgoraInviteRequest,
+@router.post("/{gathering_id}/invite", response_model=GatheringMemberOut)
+async def invite_to_gathering(
+    gathering_id: UUID,
+    payload: GatheringInviteRequest,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> AgoraMemberOut:
-    _, membership = await _require_agora_member(db, agora_id, user)
-    if membership.role != AgoraMemberRole.owner:
+) -> GatheringMemberOut:
+    _, membership = await _require_member(db, gathering_id, user)
+    if membership.role != GatheringMemberRole.owner:
         raise HTTPException(status_code=403, detail="Only owners can invite")
 
     email = payload.email.lower().strip()
     if not email:
         raise HTTPException(status_code=400, detail="Email is required")
 
-    dup = await db.execute(select(AgoraMember).where(AgoraMember.agora_id == agora_id))
+    dup = await db.execute(
+        select(GatheringMember).where(GatheringMember.gathering_id == gathering_id)
+    )
     for m in dup.scalars().all():
         if m.invited_email and m.invited_email.lower() == email:
             raise HTTPException(status_code=409, detail="Already invited")
@@ -221,35 +243,38 @@ async def invite_to_agora(
                 raise HTTPException(status_code=409, detail="Already a member")
 
     invited_user = await get_user_by_email(db, email)
-    member = AgoraMember(
-        agora_id=agora_id,
+    member = GatheringMember(
+        gathering_id=gathering_id,
         user_id=invited_user.id if invited_user else None,
         invited_email=email,
-        role=AgoraMemberRole.member,
+        role=GatheringMemberRole.member,
     )
     db.add(member)
     await db.commit()
     await db.refresh(member)
-    return AgoraMemberOut(
+    return GatheringMemberOut(
         id=member.id,
-        agora_id=member.agora_id,
+        gathering_id=member.gathering_id,
         user_id=member.user_id,
         invited_email=member.invited_email,
         role=member.role,
         display_name=invited_user.display_name if invited_user else None,
         email=email,
+        bio=invited_user.bio if invited_user else None,
+        organization=invited_user.organization if invited_user else None,
+        title=invited_user.title if invited_user else None,
         created_at=member.created_at,
     )
 
 
-@router.post("/{agora_id}/agents", response_model=list[AgentOut])
-async def add_agents_to_agora(
-    agora_id: UUID,
-    payload: AgoraAddAgentsRequest,
+@router.post("/{gathering_id}/agents", response_model=list[AgentOut])
+async def add_agents_to_gathering(
+    gathering_id: UUID,
+    payload: GatheringAddAgentsRequest,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[AgentOut]:
-    await _require_agora_member(db, agora_id, user)
+    await _require_member(db, gathering_id, user)
     if not payload.agent_ids:
         raise HTTPException(status_code=400, detail="agent_ids required")
 
@@ -258,58 +283,59 @@ async def add_agents_to_agora(
         if not agent or not agent.is_active:
             raise HTTPException(status_code=400, detail=f"Invalid agent: {agent_id}")
         exists = await db.execute(
-            select(AgoraAgent).where(
-                AgoraAgent.agora_id == agora_id, AgoraAgent.agent_id == agent_id
+            select(GatheringAgent).where(
+                GatheringAgent.gathering_id == gathering_id,
+                GatheringAgent.agent_id == agent_id,
             )
         )
         if exists.scalar_one_or_none():
             continue
-        db.add(AgoraAgent(agora_id=agora_id, agent_id=agent_id))
+        db.add(GatheringAgent(gathering_id=gathering_id, agent_id=agent_id))
 
     await db.commit()
     agents_result = await db.execute(
         select(Agent)
-        .join(AgoraAgent, AgoraAgent.agent_id == Agent.id)
-        .where(AgoraAgent.agora_id == agora_id)
+        .join(GatheringAgent, GatheringAgent.agent_id == Agent.id)
+        .where(GatheringAgent.gathering_id == gathering_id)
         .order_by(Agent.name.asc())
     )
-    return [AgentOut.model_validate(a) for a in agents_result.scalars().all()]
+    return [AgentOut.from_agent(a) for a in agents_result.scalars().all()]
 
 
 @router.post(
-    "/{agora_id}/sessions",
+    "/{gathering_id}/sessions",
     response_model=SessionCreateResponse,
     status_code=status.HTTP_201_CREATED,
 )
-async def create_agora_session(
-    agora_id: UUID,
-    payload: AgoraSessionCreate,
+async def create_gathering_session(
+    gathering_id: UUID,
+    payload: GatheringSessionCreate,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> SessionCreateResponse:
-    """Create a session inside an agora. `nature` is immutable after this call."""
-    await _require_agora_member(db, agora_id, user)
+    """Create a session inside a gathering. `nature` is immutable after this call."""
+    await _require_member(db, gathering_id, user)
     title = payload.title.strip()
     if not title:
         raise HTTPException(status_code=400, detail="Title is required")
 
-    # Prefer agents already on the agora; allow explicit ids that are on agora
     if payload.agent_ids:
         for agent_id in payload.agent_ids:
             link = await db.execute(
-                select(AgoraAgent).where(
-                    AgoraAgent.agora_id == agora_id, AgoraAgent.agent_id == agent_id
+                select(GatheringAgent).where(
+                    GatheringAgent.gathering_id == gathering_id,
+                    GatheringAgent.agent_id == agent_id,
                 )
             )
             if not link.scalar_one_or_none():
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Agent {agent_id} is not added to this agora",
+                    detail=f"Agent {agent_id} is not added to this gathering",
                 )
         agent_ids = list(payload.agent_ids)
     else:
         result = await db.execute(
-            select(AgoraAgent.agent_id).where(AgoraAgent.agora_id == agora_id)
+            select(GatheringAgent.agent_id).where(GatheringAgent.gathering_id == gathering_id)
         )
         agent_ids = list(result.scalars().all())
 
@@ -317,7 +343,7 @@ async def create_agora_session(
         title=title,
         status=SessionStatus.active,
         nature=payload.nature,
-        agora_id=agora_id,
+        gathering_id=gathering_id,
     )
     db.add(session)
     await db.flush()
@@ -353,22 +379,24 @@ async def create_agora_session(
         title=session.title,
         status=session.status,
         nature=session.nature,
-        agora_id=session.agora_id,
+        gathering_id=session.gathering_id,
     )
 
 
-@router.post("/{agora_id}/sessions/{session_id}/open", response_model=SessionCreateResponse)
-async def open_agora_session(
-    agora_id: UUID,
+@router.post(
+    "/{gathering_id}/sessions/{session_id}/open",
+    response_model=SessionCreateResponse,
+)
+async def open_gathering_session(
+    gathering_id: UUID,
     session_id: UUID,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> SessionCreateResponse:
-    """Re-issue a session invite for an agora member (nature remains unchanged)."""
-    await _require_agora_member(db, agora_id, user)
+    await _require_member(db, gathering_id, user)
     session = await db.get(Session, session_id)
-    if not session or session.agora_id != agora_id:
-        raise HTTPException(status_code=404, detail="Session not found in this agora")
+    if not session or session.gathering_id != gathering_id:
+        raise HTTPException(status_code=404, detail="Session not found in this gathering")
     invite = issue_session_invite(session)
     await db.commit()
     return SessionCreateResponse(
@@ -378,5 +406,5 @@ async def open_agora_session(
         title=session.title,
         status=session.status,
         nature=session.nature,
-        agora_id=session.agora_id,
+        gathering_id=session.gathering_id,
     )

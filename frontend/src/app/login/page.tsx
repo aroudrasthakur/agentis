@@ -32,7 +32,7 @@ export default function LoginPage() {
   return (
     <main className="mx-auto flex min-h-[calc(100vh-5rem)] max-w-md flex-col justify-center px-6 pb-16">
       <h1 className="font-display text-4xl tracking-tight text-ink">Sign in</h1>
-      <p className="mt-2 text-sm text-ink/55">Enter your dashboard of Agoras.</p>
+      <p className="mt-2 text-sm text-ink/55">Enter your dashboard of Gatherings.</p>
       <form onSubmit={onSubmit} className="mt-8 space-y-4">
         <label className="block text-xs text-ink/55">
           Email
