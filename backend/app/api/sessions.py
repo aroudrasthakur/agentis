@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.agent_types.services import gating
 from app.db import get_db
 from app.models import (
     Agent,
@@ -94,7 +95,7 @@ def _require_invite(session: Session, invite: str | None) -> None:
             detail="Missing session invite token. Use the signed share link.",
         )
     try:
-        verify_session_invite(invite, session.id, expected_jti=session.invite_jti)
+        verify_session_invite(invite, session.id)
     except TokenError as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
 
@@ -132,6 +133,9 @@ async def create_session(
         agent = await db.get(Agent, agent_id)
         if not agent or not agent.is_active:
             raise HTTPException(status_code=400, detail=f"Invalid agent_id: {agent_id}")
+        blocked = gating.deployment_block_reason(agent)
+        if blocked:
+            raise HTTPException(status_code=400, detail=blocked)
         try:
             await attach_agent_to_session(db, session, agent, human=human)
         except ValueError as exc:
@@ -187,6 +191,9 @@ async def attach_agents(
         agent = await db.get(Agent, agent_id)
         if not agent or not agent.is_active:
             raise HTTPException(status_code=400, detail=f"Invalid agent_id: {agent_id}")
+        blocked = gating.deployment_block_reason(agent)
+        if blocked:
+            raise HTTPException(status_code=400, detail=blocked)
         requested = caps_map.get(str(agent_id))
         try:
             _, event = await attach_agent_to_session(

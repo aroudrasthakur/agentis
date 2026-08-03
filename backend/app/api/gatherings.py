@@ -5,6 +5,9 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.agent_types.services import gating
+from app.authorization.permissions.registry import P
+from app.authorization.services.authorization_service import AuthorizationContext, require_permission
 from app.db import get_db
 from app.deps import get_current_user
 from app.models import (
@@ -224,6 +227,12 @@ async def invite_to_gathering(
     db: AsyncSession = Depends(get_db),
 ) -> GatheringMemberOut:
     _, membership = await _require_member(db, gathering_id, user)
+    await require_permission(
+        db,
+        user,
+        P.WORKSPACE_MEMBERS_MANAGE,
+        AuthorizationContext(workspace_id=gathering_id),
+    )
     if membership.role != GatheringMemberRole.owner:
         raise HTTPException(status_code=403, detail="Only owners can invite")
 
@@ -282,15 +291,27 @@ async def add_agents_to_gathering(
         agent = await db.get(Agent, agent_id)
         if not agent or not agent.is_active:
             raise HTTPException(status_code=400, detail=f"Invalid agent: {agent_id}")
+        blocked = gating.deployment_block_reason(agent)
+        if blocked:
+            raise HTTPException(status_code=400, detail=blocked)
         exists = await db.execute(
             select(GatheringAgent).where(
                 GatheringAgent.gathering_id == gathering_id,
                 GatheringAgent.agent_id == agent_id,
             )
         )
-        if exists.scalar_one_or_none():
-            continue
-        db.add(GatheringAgent(gathering_id=gathering_id, agent_id=agent_id))
+        if not exists.scalar_one_or_none():
+            db.add(GatheringAgent(gathering_id=gathering_id, agent_id=agent_id))
+            from app.authorization.services.future_grant_apply import apply_future_grants_for_resource
+
+            await apply_future_grants_for_resource(
+                db,
+                workspace_id=gathering_id,
+                resource_type="agent",
+                resource_id=agent_id,
+                context={"resource_status": "active" if agent.is_active else "inactive"},
+                actor_user_id=user.id,
+            )
 
     await db.commit()
     agents_result = await db.execute(
@@ -319,6 +340,7 @@ async def create_gathering_session(
     if not title:
         raise HTTPException(status_code=400, detail="Title is required")
 
+    explicit_agent_ids = bool(payload.agent_ids)
     if payload.agent_ids:
         for agent_id in payload.agent_ids:
             link = await db.execute(
@@ -365,7 +387,17 @@ async def create_gathering_session(
     for agent_id in agent_ids:
         agent = await db.get(Agent, agent_id)
         if not agent or not agent.is_active:
-            raise HTTPException(status_code=400, detail=f"Invalid agent_id: {agent_id}")
+            if explicit_agent_ids:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid or inactive agent_id: {agent_id}",
+                )
+            continue
+        blocked = gating.deployment_block_reason(agent)
+        if blocked:
+            if explicit_agent_ids:
+                raise HTTPException(status_code=400, detail=blocked)
+            continue
         try:
             await attach_agent_to_session(db, session, agent, human=human)
         except ValueError as exc:

@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { User } from "@/lib/api";
@@ -67,12 +66,7 @@ export default function ProfilePage() {
 
   return (
     <main className="mx-auto max-w-xl px-6 pb-20 pt-4">
-      <Link
-        href="/dashboard"
-        className="text-[11px] uppercase tracking-[0.22em] text-ink/40 hover:text-ink/70"
-      >
-        ← Dashboard
-      </Link>
+      <p className="text-[11px] uppercase tracking-[0.22em] text-ink/40">Account</p>
       <h1 className="mt-2 font-display text-4xl tracking-tight text-ink">Your profile</h1>
       <p className="mt-2 text-sm text-ink/55">
         Stored person information shown in gatherings you join.

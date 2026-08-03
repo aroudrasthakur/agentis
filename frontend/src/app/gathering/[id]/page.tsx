@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import type { GatheringDetail, Agent, SessionNature } from "@/lib/api";
@@ -72,13 +71,7 @@ export default function GatheringPage() {
   async function openAddAgents() {
     setAddOpen(true);
     try {
-      const [local, downloaded] = await Promise.all([
-        api.guildAgents("local"),
-        api.guildAgents("downloaded"),
-      ]);
-      const map = new Map<string, Agent>();
-      for (const a of [...local, ...downloaded]) map.set(a.id, a);
-      setGuildAgents(Array.from(map.values()));
+      setGuildAgents(await api.attachableAgents(gatheringId));
       setSelected([]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load agents");
@@ -107,7 +100,7 @@ export default function GatheringPage() {
       const session = await api.createGatheringSession(gatheringId, {
         title: title.trim(),
         nature,
-        agent_ids: gathering?.agents.map((a) => a.id) || [],
+        agent_ids: gathering?.agents.filter((a) => a.is_active).map((a) => a.id) ?? [],
       });
       router.push(
         `/session/${session.id}?invite=${encodeURIComponent(session.invite)}`
@@ -144,12 +137,7 @@ export default function GatheringPage() {
 
   return (
     <main className="mx-auto max-w-6xl px-6 pb-20 pt-4">
-      <Link
-        href="/dashboard"
-        className="text-[11px] uppercase tracking-[0.22em] text-ink/40 hover:text-ink/70"
-      >
-        ← Dashboard
-      </Link>
+      <p className="text-[11px] uppercase tracking-[0.22em] text-ink/40">Gathering</p>
       <div className="mt-2 flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="font-display text-4xl tracking-tight text-ink">

@@ -128,7 +128,8 @@ function AttachAgentDialog({
         </DialogHeader>
         {available.length === 0 ? (
           <p className="text-sm text-ink/60">
-            No more agents available. Register more on the Agents page.
+            No agents available. Register or download agents in Guild, or add them to this
+            gathering.
           </p>
         ) : (
           <ul className="mb-4 max-h-64 space-y-2 overflow-y-auto">
@@ -152,6 +153,7 @@ function AttachAgentDialog({
                       <span className="block text-sm font-medium">{agent.name}</span>
                       <span className="text-xs text-ink/50">
                         {agent.hosting_mode === "hosted" ? "Hosted" : "Remote"} · {agent.org_tag}
+                        {agent.downloaded ? " · Downloaded" : ""}
                       </span>
                     </span>
                     <OrgBadge org={agent.org_tag} />

@@ -1,4 +1,17 @@
 import { getToken } from "@/lib/auth";
+import type {
+  AgentMetricConfiguration,
+  AgentMetricDefinition,
+  AgentTypeConfiguration,
+  AgentTypeDefinition,
+  AgentTypeSummary,
+  AgentTypeValidationResult,
+  CompatibilityReport,
+  CustomAgentType,
+  DeploymentReadiness,
+  SelectorCatalogs,
+  TypeMigrationPreview,
+} from "@/agent-types/schemas";
 
 export type OrgTag = "Internal" | "External";
 export type HostingMode = "hosted" | "remote_mcp";
@@ -82,6 +95,55 @@ export interface AuthResponse {
   user: User;
 }
 
+export interface PermissionDefinition {
+  key: string;
+  label: string;
+  description: string;
+  category: string;
+  supported_scopes: string[];
+  sensitive: boolean;
+  assignable_to_custom_roles: boolean;
+  dependencies: string[];
+  conflicts: string[];
+}
+
+export interface RolePermissionRow {
+  permission_key: string;
+  effect: "allow" | "deny";
+  scope: string;
+  resource_type?: string | null;
+  resource_ids?: string[];
+}
+
+export interface RoleSummary {
+  id: string;
+  workspace_id?: string | null;
+  name: string;
+  slug: string;
+  description?: string | null;
+  kind: "system" | "custom";
+  category?: string;
+  status: "active" | "archived" | "deprecated";
+  is_default: boolean;
+  is_immutable: boolean;
+  is_managed?: boolean;
+  assignable_to_users?: boolean;
+  resource_type?: string | null;
+  resource_id?: string | null;
+  member_count: number;
+  permissions: RolePermissionRow[];
+  inherited_role_ids?: string[];
+  inheriting_role_ids?: string[];
+}
+
+export type RoleCreatePayload = {
+  name: string;
+  description?: string | null;
+  workspace_id?: string | null;
+  permissions: RolePermissionRow[];
+  parent_role_ids?: string[];
+};
+
 export interface Agent {
   id: string;
   name: string;
@@ -99,9 +161,76 @@ export interface Agent {
   tags?: string[];
   notes?: string | null;
   metadata?: Record<string, unknown>;
+  agent_type_id?: string | null;
+  agent_type_version?: number | null;
+  agent_type_configuration?: AgentTypeConfiguration;
+  agent_metric_configuration?: AgentMetricConfiguration;
+  agent_type_validation_status?: Record<string, unknown>;
+  deployed_type_id?: string | null;
+  deployed_type_version?: number | null;
+  deployed_at?: string | null;
+  requires_type_setup?: boolean;
+  deployment_ready?: boolean;
+  description_format?: "plain" | "markdown";
   created_at: string;
   updated_at?: string | null;
   downloaded?: boolean;
+}
+
+export interface AgentDescriptionSummary {
+  agent_id: string;
+  name: string;
+  agent_key: string;
+  description_preview?: string | null;
+  has_description: boolean;
+  description_format: "plain" | "markdown";
+  type_id?: string | null;
+  type_name?: string | null;
+  deployment_status: "needs_type" | "not_deployed" | "ready" | "needs_attention";
+  deployment_status_label: string;
+  is_active: boolean;
+  requires_type_setup: boolean;
+  deployment_ready: boolean;
+}
+
+export interface ConfigFieldDisplay {
+  key: string;
+  label: string;
+  section: string;
+  section_label: string;
+  value_display: string;
+  is_set: boolean;
+}
+
+export interface ConfigurationSectionDisplay {
+  section: string;
+  section_label: string;
+  fields: ConfigFieldDisplay[];
+}
+
+export interface MetricSummaryDisplay {
+  key: string;
+  label: string;
+  enabled: boolean;
+  required: boolean;
+  target_display?: string | null;
+}
+
+export interface AgentDescriptionProfile extends AgentDescriptionSummary {
+  description?: string | null;
+  hosting_mode: string;
+  org_tag: string;
+  capabilities: string[];
+  tags: string[];
+  notes?: string | null;
+  version?: string | null;
+  type_version?: number | null;
+  configuration_sections: ConfigurationSectionDisplay[];
+  metrics: MetricSummaryDisplay[];
+  deployed_type_id?: string | null;
+  deployed_type_version?: number | null;
+  deployed_at?: string | null;
+  highlights: string[];
 }
 
 export interface Gathering {
@@ -284,8 +413,25 @@ export const api = {
     if (q?.trim()) params.set("q", q.trim());
     return request<Agent[]>(`/guild/agents?${params}`, undefined, true);
   },
+  attachableAgents: (gatheringId?: string | null) => {
+    const params = gatheringId ? `?gathering_id=${encodeURIComponent(gatheringId)}` : "";
+    return request<Agent[]>(`/guild/agents/attachable${params}`, undefined, true);
+  },
   getGuildAgent: (agentId: string) =>
     request<Agent>(`/guild/agents/${agentId}`, undefined, true),
+  listAgentDescriptions: () =>
+    request<AgentDescriptionSummary[]>("/guild/agents/descriptions", undefined, true),
+  getAgentDescription: (agentId: string) =>
+    request<AgentDescriptionProfile>(`/guild/agents/${agentId}/description`, undefined, true),
+  updateAgentDescription: (
+    agentId: string,
+    body: { description?: string | null; description_format?: "plain" | "markdown" }
+  ) =>
+    request<AgentDescriptionProfile>(
+      `/guild/agents/${agentId}/description`,
+      { method: "PUT", body: JSON.stringify(body) },
+      true
+    ),
   updateGuildAgent: (
     agentId: string,
     body: {
@@ -320,7 +466,163 @@ export const api = {
   downloadAgent: (agentId: string) =>
     request<Agent>(`/guild/agents/${agentId}/download`, { method: "POST" }, true),
 
-  listAgents: () => request<Agent[]>("/agents"),
+  // Agent types
+  listAgentTypes: (includeArchived = false) =>
+    request<AgentTypeSummary[]>(
+      `/agent-types?include_archived=${includeArchived}`,
+      undefined,
+      true
+    ),
+  getAgentType: (typeId: string, version?: number | null) => {
+    const params = version != null ? `?version=${version}` : "";
+    return request<AgentTypeDefinition>(
+      `/agent-types/${encodeURIComponent(typeId)}${params}`,
+      undefined,
+      true
+    );
+  },
+  getAgentTypeMetrics: (typeId: string, version?: number | null) => {
+    const params = version != null ? `?version=${version}` : "";
+    return request<AgentMetricDefinition[]>(
+      `/agent-types/${encodeURIComponent(typeId)}/metrics${params}`,
+      undefined,
+      true
+    );
+  },
+  getSelectorCatalogs: () =>
+    request<SelectorCatalogs>("/agent-types/catalogs", undefined, true),
+
+  listCustomAgentTypes: (includeArchived = false) =>
+    request<CustomAgentType[]>(
+      `/agent-types/custom?include_archived=${includeArchived}`,
+      undefined,
+      true
+    ),
+  getCustomAgentType: (familyId: string, version?: number | null) => {
+    const params = version != null ? `?version=${version}` : "";
+    return request<CustomAgentType>(
+      `/agent-types/custom/${familyId}${params}`,
+      undefined,
+      true
+    );
+  },
+  listCustomAgentTypeVersions: (familyId: string) =>
+    request<CustomAgentType[]>(`/agent-types/custom/${familyId}/versions`, undefined, true),
+  createCustomAgentType: (body: Record<string, unknown>) =>
+    request<CustomAgentType>(
+      "/agent-types/custom",
+      { method: "POST", body: JSON.stringify(body) },
+      true
+    ),
+  updateCustomAgentType: (familyId: string, body: Record<string, unknown>) =>
+    request<CustomAgentType>(
+      `/agent-types/custom/${familyId}`,
+      { method: "PATCH", body: JSON.stringify(body) },
+      true
+    ),
+  duplicateCustomAgentType: (familyId: string) =>
+    request<CustomAgentType>(
+      `/agent-types/custom/${familyId}/duplicate`,
+      { method: "POST" },
+      true
+    ),
+  archiveCustomAgentType: (familyId: string) =>
+    request<CustomAgentType>(
+      `/agent-types/custom/${familyId}/archive`,
+      { method: "POST" },
+      true
+    ),
+
+  // Agent type assignment and deployment
+  assignAgentType: (
+    agentId: string,
+    body: {
+      typeId: string;
+      typeVersion?: number | null;
+      configuration?: AgentTypeConfiguration;
+      metricConfiguration?: AgentMetricConfiguration;
+      discardIncompatible?: boolean;
+    }
+  ) =>
+    request<{
+      agent: Agent;
+      validation: AgentTypeValidationResult;
+      compatibility: CompatibilityReport;
+      readiness: DeploymentReadiness;
+      definition: AgentTypeDefinition;
+    }>(
+      `/guild/agents/${agentId}/type`,
+      { method: "POST", body: JSON.stringify(body) },
+      true
+    ),
+  saveAgentTypeConfiguration: (
+    agentId: string,
+    body: {
+      configuration?: AgentTypeConfiguration;
+      metricConfiguration?: AgentMetricConfiguration;
+    }
+  ) =>
+    request<{
+      agent: Agent;
+      validation: AgentTypeValidationResult;
+      readiness: DeploymentReadiness;
+    }>(
+      `/guild/agents/${agentId}/type/configuration`,
+      { method: "PATCH", body: JSON.stringify(body) },
+      true
+    ),
+  validateAgentType: (
+    agentId: string,
+    body?: {
+      configuration?: AgentTypeConfiguration;
+      metricConfiguration?: AgentMetricConfiguration;
+    }
+  ) =>
+    request<AgentTypeValidationResult>(
+      `/guild/agents/${agentId}/validate`,
+      { method: "POST", body: JSON.stringify(body ?? {}) },
+      true
+    ),
+  getDeploymentReadiness: (agentId: string) =>
+    request<DeploymentReadiness>(
+      `/guild/agents/${agentId}/deployment-readiness`,
+      undefined,
+      true
+    ),
+  deployAgent: (agentId: string) =>
+    request<{ agent: Agent; readiness: DeploymentReadiness }>(
+      `/guild/agents/${agentId}/deploy`,
+      { method: "POST" },
+      true
+    ),
+  previewAgentTypeMigration: (agentId: string, targetVersion?: number | null) => {
+    const params = targetVersion != null ? `?target_version=${targetVersion}` : "";
+    return request<TypeMigrationPreview>(
+      `/guild/agents/${agentId}/type/migration-preview${params}`,
+      undefined,
+      true
+    );
+  },
+  migrateAgentType: (
+    agentId: string,
+    body: {
+      targetVersion?: number | null;
+      configuration?: AgentTypeConfiguration;
+      metricConfiguration?: AgentMetricConfiguration;
+    }
+  ) =>
+    request<{
+      agent: Agent;
+      validation: AgentTypeValidationResult;
+      readiness: DeploymentReadiness;
+      preview: TypeMigrationPreview;
+    }>(
+      `/guild/agents/${agentId}/type/migrate`,
+      { method: "POST", body: JSON.stringify(body) },
+      true
+    ),
+
+  listAgents: () => request<Agent[]>("/agents", undefined, true),
   createAgent: (body: {
     name: string;
     agent_key: string;
@@ -333,7 +635,7 @@ export const api = {
     request<Agent>("/agents", {
       method: "POST",
       body: JSON.stringify(body),
-    }),
+    }, true),
   createSession: (body?: {
     title?: string;
     agent_ids?: string[];
@@ -359,9 +661,9 @@ export const api = {
     request<Session>(withInvite(`/sessions/${sessionId}/start`, invite), {
       method: "POST",
     }),
-  listActionPolicies: () => request<ActionPolicy[]>("/action-policies"),
+  listActionPolicies: () => request<ActionPolicy[]>("/action-policies", undefined, true),
   getActionPolicy: (actionType: string) =>
-    request<ActionPolicy>(`/action-policies/${encodeURIComponent(actionType)}`),
+    request<ActionPolicy>(`/action-policies/${encodeURIComponent(actionType)}`, undefined, true),
   patchActionPolicy: (
     actionType: string,
     body: { mode?: ActionPolicyMode; config?: ActionPolicy["config"] }
@@ -371,8 +673,69 @@ export const api = {
       {
         method: "PATCH",
         body: JSON.stringify(body),
-      }
+      },
+      true
     ),
+
+  listRoles: () => request<RoleSummary[]>("/authorization/roles", undefined, true),
+  getRole: (roleId: string) =>
+    request<RoleSummary>(`/authorization/roles/${roleId}`, undefined, true),
+  listPermissionDefinitions: () =>
+    request<PermissionDefinition[]>("/authorization/permissions", undefined, true),
+  createRole: (body: RoleCreatePayload) =>
+    request<RoleSummary>(
+      "/authorization/roles",
+      { method: "POST", body: JSON.stringify(body) },
+      true
+    ),
+  myEffectivePermissions: () =>
+    request<{ permissions: string[]; evaluated_at: string }>(
+      "/authorization/me/permissions",
+      undefined,
+      true
+    ),
+  checkPermission: (body: {
+    permission: string;
+    workspace_id?: string;
+    resource_type?: string;
+    resource_id?: string;
+  }) =>
+    request<{ allowed: boolean; decision: Record<string, unknown> }>(
+      "/authorization/check",
+      { method: "POST", body: JSON.stringify(body) },
+      true
+    ),
+  checkPermissionBatch: (checks: {
+    permission: string;
+    workspace_id?: string;
+    resource_type?: string;
+    resource_id?: string;
+  }[]) =>
+    request<{ results: { permission: string; decision: Record<string, unknown> }[] }>(
+      "/authorization/check-batch",
+      { method: "POST", body: JSON.stringify({ checks }) },
+      true
+    ),
+  explainAuthorization: (body: {
+    user_id: string;
+    permission: string;
+    workspace_id?: string;
+    resource_type?: string;
+    resource_id?: string;
+  }) =>
+    request<Record<string, unknown>>(
+      "/authorization/explain",
+      { method: "POST", body: JSON.stringify(body) },
+      true
+    ),
+  getGatheringAuthSettings: (gatheringId: string) =>
+    request<{
+      gathering_id: string;
+      access_mode: string;
+      future_grants_enabled?: boolean;
+    }>(`/authorization/gatherings/${gatheringId}/settings`, undefined, true),
+  getAgentAccess: (agentId: string) =>
+    request<Record<string, unknown>>(`/authorization/agents/${agentId}/access`, undefined, true),
 };
 
 export function parsePlanContent(content: string): PlanContent | null {

@@ -3,9 +3,20 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import action_policies, agents, auth, gatherings, guild, sessions, ws
+from app.api import (
+    action_policies,
+    agent_types,
+    agents,
+    auth,
+    authorization,
+    gatherings,
+    guild,
+    sessions,
+    ws,
+)
 from app.config import get_settings
 from app.db import AsyncSessionLocal
+from app.authorization.services.bootstrap import ensure_system_roles
 from app.services.session_service import seed_default_agents
 
 
@@ -13,6 +24,8 @@ from app.services.session_service import seed_default_agents
 async def lifespan(_: FastAPI):
     async with AsyncSessionLocal() as db:
         await seed_default_agents(db)
+        await ensure_system_roles(db)
+        await db.commit()
     yield
 
 
@@ -35,8 +48,10 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     app.include_router(auth.router)
+    app.include_router(authorization.router)
     app.include_router(gatherings.router)
     app.include_router(guild.router)
+    app.include_router(agent_types.router)
     app.include_router(agents.router)
     app.include_router(sessions.router)
     app.include_router(action_policies.router)

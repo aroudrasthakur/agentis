@@ -8,7 +8,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents import HOSTED_AGENTS
+from app.agents import HOSTED_AGENTS, TEST_AGENT_KEY
 from app.config import get_settings
 from app.services.access import assert_participant_can_call_tool
 from app.services.tokens import CapabilityDenied, TokenError
@@ -29,18 +29,17 @@ async def run_hosted_agent(
 
     settings = get_settings()
     if not settings.openai_api_key:
-        if agent_key == "support_agent":
-            # Still exercise capability checks for demo tools even in stub mode
+        if agent_key == TEST_AGENT_KEY:
             try:
-                await assert_participant_can_call_tool(db, participant_id, "lookup_order")
-                await assert_participant_can_call_tool(db, participant_id, "get_customer_summary")
-                await assert_participant_can_call_tool(db, participant_id, "propose_refund")
+                await assert_participant_can_call_tool(db, participant_id, "fetch_sample_explain")
+                await assert_participant_can_call_tool(db, participant_id, "list_table_stats")
+                await assert_participant_can_call_tool(db, participant_id, "suggest_indexes")
             except (TokenError, CapabilityDenied) as exc:
-                return f"Access denied during support turn: {exc}"
+                return f"Access denied during analyst turn: {exc}"
             return (
-                "I've reviewed the refund request for order ORD-1001 ($89.99). "
-                "Customer looks eligible. I'll propose a refund and hand off to Vendor Billing "
-                "to execute process_refund after human approval."
+                "Findings (stub mode): orders shows heavy seq_scan vs idx_scan — add an index on "
+                "orders(created_at) and consider orders(customer_id, created_at) for the reporting "
+                "join. Run EXPLAIN ANALYZE after indexing; expect the hash aggregate to shrink sharply."
             )
         return definition.stub_reply if definition else f"[{agent_key}] No API key configured."
 

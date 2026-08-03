@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.agents import TEST_AGENT_KEY
 from app.agents.runtime import run_hosted_agent
 from app.mcp_client import call_mcp_tool, remote_agent_message
 from app.models import (
@@ -345,7 +346,7 @@ async def run_agent_turn(db: AsyncSession, session: Session, participant: Partic
         text = await run_hosted_agent(
             db=db,
             participant_id=participant.id,
-            agent_key=participant.agent_key or "support_agent",
+            agent_key=participant.agent_key or TEST_AGENT_KEY,
             timeline_context=context,
             user_hint=hint,
         )
@@ -423,15 +424,7 @@ async def _orchestration_loop(session_id: UUID) -> None:
                 await _broadcast_event(db, session.id, event)
                 return
 
-            # Prefer support then vendor ordering when present
-            def sort_key(p: Participant) -> int:
-                if p.agent_key == "support_agent":
-                    return 0
-                if p.agent_key == "vendor_billing":
-                    return 2
-                return 1
-
-            agents = sorted(agents, key=sort_key)
+            agents = sorted(agents, key=lambda p: p.name or "")
 
             if not session.active_participant_id:
                 session.active_participant_id = agents[0].id

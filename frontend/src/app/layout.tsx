@@ -3,6 +3,7 @@ import { Fraunces, DM_Sans } from "next/font/google";
 import "@/styles/theme.css";
 import "./globals.css";
 import { SiteNav } from "@/components/SiteNav";
+import { AppShell } from "@/components/AppShell";
 
 const display = Fraunces({
   subsets: ["latin"],
@@ -26,7 +27,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className={`${display.variable} ${sans.variable} font-sans antialiased`}>
         <div className="app-shell min-h-screen text-ink">
           <SiteNav />
-          {children}
+          <AppShell>{children}</AppShell>
         </div>
       </body>
     </html>

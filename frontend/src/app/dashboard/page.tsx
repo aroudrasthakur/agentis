@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { Gathering } from "@/lib/api";
 import { api } from "@/lib/api";
-import { clearAuth, getStoredUser, isLoggedIn } from "@/lib/auth";
+import { getStoredUser, isLoggedIn } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -13,11 +13,11 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 
 export default function DashboardPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [gatherings, setGatherings] = useState<Gathering[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState("");
@@ -39,6 +39,12 @@ export default function DashboardPage() {
       }
     })();
   }, [router]);
+
+  useEffect(() => {
+    if (searchParams.get("create") === "gathering") {
+      setOpen(true);
+    }
+  }, [searchParams]);
 
   async function createGathering() {
     if (!name.trim()) return;
@@ -72,54 +78,35 @@ export default function DashboardPage() {
             {user ? ` Signed in as ${user.display_name}.` : ""}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Link href="/dashboard/profile">
-            <Button variant="outline">Profile</Button>
-          </Link>
-          <Link href="/dashboard/guild">
-            <Button variant="outline">Guild</Button>
-          </Link>
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-              <Button variant="teal">New Gathering</Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Create gathering</DialogTitle>
-              </DialogHeader>
-              <div className="mt-3 space-y-3">
-                <Input
-                  placeholder="Name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                />
-                <Input
-                  placeholder="Description (optional)"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                />
-                <Button
-                  variant="teal"
-                  className="w-full"
-                  disabled={busy || !name.trim()}
-                  onClick={() => void createGathering()}
-                >
-                  {busy ? "Creating…" : "Create"}
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
-          <Button
-            variant="ghost"
-            onClick={() => {
-              clearAuth();
-              router.replace("/login");
-            }}
-          >
-            Sign out
-          </Button>
-        </div>
       </div>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create gathering</DialogTitle>
+          </DialogHeader>
+          <div className="mt-3 space-y-3">
+            <Input
+              placeholder="Name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+            <Input
+              placeholder="Description (optional)"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+            />
+            <Button
+              variant="teal"
+              className="w-full"
+              disabled={busy || !name.trim()}
+              onClick={() => void createGathering()}
+            >
+              {busy ? "Creating…" : "Create"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {error && <p className="mb-4 text-sm text-coral">{error}</p>}
 

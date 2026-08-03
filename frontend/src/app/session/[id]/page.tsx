@@ -45,12 +45,14 @@ function SessionRoom() {
     }
     void (async () => {
       try {
-        const [s, a] = await Promise.all([
-          api.getSession(sessionId, invite),
-          api.listAgents(),
-        ]);
+        const s = await api.getSession(sessionId, invite);
         setSession(s);
-        setAgents(a);
+        try {
+          const attachable = await api.attachableAgents(s.gathering_id);
+          setAgents(attachable);
+        } catch {
+          setAgents([]);
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load session");
       }
@@ -94,7 +96,7 @@ function SessionRoom() {
       : "");
 
   return (
-    <main className="mx-auto flex h-[calc(100vh-4.5rem)] max-w-7xl flex-col px-4 pb-4">
+    <main className="mx-auto flex h-full min-h-[calc(100vh-4.5rem)] max-w-7xl flex-col px-4 pb-4">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
           <h1 className="font-display text-2xl text-ink">{session.title}</h1>

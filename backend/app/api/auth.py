@@ -42,6 +42,9 @@ async def signup(payload: UserCreate, db: AsyncSession = Depends(get_db)) -> Aut
         display_name=payload.display_name or email.split("@")[0],
         password=payload.password,
     )
+    from app.authorization.services.bootstrap import assign_default_roles_for_new_user
+
+    await assign_default_roles_for_new_user(db, user.id)
     await _claim_invites(db, user)
     await db.commit()
     await db.refresh(user)

@@ -3,7 +3,17 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, Text, func
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -73,6 +83,12 @@ class GatheringMemberRole(str, enum.Enum):
     member = "member"
 
 
+class CustomAgentTypeStatus(str, enum.Enum):
+    draft = "draft"
+    active = "active"
+    archived = "archived"
+
+
 org_tag_enum = Enum(OrgTag, name="org_tag", values_callable=lambda x: [e.value for e in x])
 hosting_mode_enum = Enum(
     HostingMode, name="hosting_mode", values_callable=lambda x: [e.value for e in x]
@@ -100,6 +116,11 @@ gathering_member_role_enum = Enum(
     name="gathering_member_role",
     values_callable=lambda x: [e.value for e in x],
 )
+custom_agent_type_status_enum = Enum(
+    CustomAgentTypeStatus,
+    name="custom_agent_type_status",
+    values_callable=lambda x: [e.value for e in x],
+)
 
 
 class User(Base):
@@ -116,6 +137,7 @@ class User(Base):
     title: Mapped[str | None] = mapped_column(String(255), nullable=True)
     avatar_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     profile: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -154,6 +176,26 @@ class Agent(Base):
     metadata_: Mapped[dict[str, Any]] = mapped_column(
         "metadata", JSONB, nullable=False, default=dict
     )
+    # Agent type assignment (nullable for agents created before agent types existed).
+    agent_type_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    agent_type_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    agent_type_configuration: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict
+    )
+    agent_metric_configuration: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict
+    )
+    agent_type_validation_status: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict
+    )
+    # Snapshot of the exact type version + configuration used at last deployment.
+    deployed_type_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    deployed_type_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    deployed_configuration: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    deployed_metric_configuration: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB, nullable=True
+    )
+    deployed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -179,6 +221,40 @@ class AgentDownload(Base):
 
     user: Mapped[User] = relationship(back_populates="downloads")
     agent: Mapped[Agent] = relationship(back_populates="downloads")
+
+
+class CustomAgentType(Base):
+    """One immutable row per (family, version) of a user-defined agent type."""
+
+    __tablename__ = "custom_agent_types"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    family_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    slug: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    icon: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    base_type_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    status: Mapped[CustomAgentTypeStatus] = mapped_column(
+        custom_agent_type_status_enum, default=CustomAgentTypeStatus.draft, nullable=False
+    )
+    parameter_definitions: Mapped[list[Any]] = mapped_column(JSONB, nullable=False, default=list)
+    metric_definitions: Mapped[list[Any]] = mapped_column(JSONB, nullable=False, default=list)
+    default_autonomy_level: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    default_risk_level: Mapped[str] = mapped_column(String(32), nullable=False, default="low")
+    owner_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        UniqueConstraint("family_id", "version", name="uq_custom_agent_types_family_version"),
+    )
 
 
 class Gathering(Base):
@@ -334,3 +410,15 @@ class PolicyChangeEvent(Base):
     before: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     after: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+from app.models.authorization import (  # noqa: E402,F401
+    AuthAuthorizationAuditEvent,
+    AuthFutureResourceGrant,
+    AuthGatheringAuthorizationSettings,
+    AuthResourceOwnership,
+    AuthRole,
+    AuthRoleInheritance,
+    AuthRolePermission,
+    AuthUserPermissionOverride,
+    AuthUserRoleAssignment,
+)

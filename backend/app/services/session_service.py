@@ -1,12 +1,17 @@
+from datetime import datetime, timezone
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.agent_types.builtin import BUILT_IN_AGENT_TYPES
+from app.agent_types.defaults import default_metric_configuration
 from app.config import get_settings
 from app.models import (
     Agent,
+    AgentSource,
     Event,
     EventType,
     HostingMode,
@@ -23,12 +28,16 @@ from app.services.tokens import (
 )
 
 
-DEFAULT_CAPABILITIES: dict[str, list[str]] = {
-    "support_agent": ["lookup_order", "get_customer_summary", "propose_refund"],
-    "triage_agent": [],
-    "vendor_billing": ["check_billing_status", "process_refund"],
-}
+from app.agents import TEST_AGENT_KEY
 
+
+DEFAULT_CAPABILITIES: dict[str, list[str]] = {
+    TEST_AGENT_KEY: [
+        "fetch_sample_explain",
+        "list_table_stats",
+        "suggest_indexes",
+    ],
+}
 
 async def next_sequence(db: AsyncSession, session_id: UUID) -> int:
     result = await db.execute(
@@ -139,51 +148,122 @@ async def get_session_full(db: AsyncSession, session_id: UUID) -> Session | None
     return result.scalar_one_or_none()
 
 
+def _test_agent_type_configuration(capabilities: list[str]) -> dict[str, Any]:
+    """A complete Task / Domain type configuration for the seeded test agent."""
+    return {
+        "autonomy_level": "2",
+        "risk_level": "low",
+        "state_mode": "session",
+        "execution_mode": "interactive_workflow",
+        "allowed_tools": list(capabilities),
+        "fallback_behavior": "return_control_to_runtime",
+        "audit_logging_enabled": True,
+        "tracing_enabled": True,
+        "evaluation_enabled": False,
+        "domain": "PostgreSQL performance",
+        "supported_tasks": ["analysis", "diagnosis", "recommendation"],
+        "input_formats": ["plain_text", "sql", "logs"],
+        "output_format": "markdown",
+        "structured_output_required": False,
+        "domain_instructions": (
+            "Analyze PostgreSQL EXPLAIN output and table statistics, then recommend indexes "
+            "and query rewrites with explicit trade-offs. Cite the tool output you relied on."
+        ),
+        "knowledge_sources": ["postgres_metrics"],
+        "required_evidence": ["tool_output"],
+        "confidence_threshold": 0.7,
+        "data_freshness_requirement": "any",
+        "failure_behavior": "return_control_to_runtime",
+        "domain_validation_rules": {
+            "requires_tool_evidence": True,
+            "max_recommendations": 5,
+        },
+        "unsupported_task_behavior": "return_control_to_runtime",
+        "allowed_tool_categories": ["read_only", "analysis"],
+    }
+
+
+def _test_agent_metric_configuration() -> dict[str, Any]:
+    definition = BUILT_IN_AGENT_TYPES["task_domain"]
+    return {
+        key: entry.model_dump(by_alias=True)
+        for key, entry in default_metric_configuration(definition).items()
+    }
+
+
+def _apply_test_agent_type(agent: Agent) -> None:
+    """Keep the seeded demo agent deployable under the agent type requirement."""
+    definition = BUILT_IN_AGENT_TYPES["task_domain"]
+    configuration = _test_agent_type_configuration(list(agent.capabilities or []))
+    metrics = _test_agent_metric_configuration()
+
+    agent.agent_type_id = definition.id
+    agent.agent_type_version = definition.version
+    agent.agent_type_configuration = configuration
+    agent.agent_metric_configuration = metrics
+    agent.agent_type_validation_status = {
+        "valid": True,
+        "errors": [],
+        "missingRequiredParameters": [],
+        "deploymentBlockers": [],
+        "requiresTypeSetup": False,
+        "checkedAt": datetime.now(timezone.utc).isoformat(),
+    }
+    agent.deployed_type_id = definition.id
+    agent.deployed_type_version = definition.version
+    agent.deployed_configuration = configuration
+    agent.deployed_metric_configuration = metrics
+    agent.deployed_at = agent.deployed_at or datetime.now(timezone.utc)
+
+
 async def seed_default_agents(db: AsyncSession) -> None:
-    settings = get_settings()
-    defaults = [
-        Agent(
-            name="Support Agent",
-            agent_key="support_agent",
-            org_tag=OrgTag.internal,
-            hosting_mode=HostingMode.hosted,
-            endpoint_url=None,
-            description="Internal hosted support agent for refunds and customer help.",
-            capabilities=DEFAULT_CAPABILITIES["support_agent"],
-            is_active=True,
+    """Retire legacy demo agents and ensure a single active test agent in the registry."""
+    result = await db.execute(select(Agent))
+    for row in result.scalars().all():
+        if row.agent_key == TEST_AGENT_KEY:
+            continue
+        row.is_active = False
+
+    caps = DEFAULT_CAPABILITIES[TEST_AGENT_KEY]
+    test_agent = Agent(
+        name="PostgreSQL Performance Analyst",
+        agent_key=TEST_AGENT_KEY,
+        org_tag=OrgTag.internal,
+        hosting_mode=HostingMode.hosted,
+        endpoint_url=None,
+        description=(
+            "Test agent focused on PostgreSQL EXPLAIN analysis, table statistics, and index design. "
+            "Use in gatherings to demo scoped tools and domain-specific collaboration."
         ),
-        Agent(
-            name="Triage Agent",
-            agent_key="triage_agent",
-            org_tag=OrgTag.internal,
-            hosting_mode=HostingMode.hosted,
-            endpoint_url=None,
-            description="Lightweight hosted triage stub.",
-            capabilities=DEFAULT_CAPABILITIES["triage_agent"],
-            is_active=True,
-        ),
-        Agent(
-            name="Vendor Billing",
-            agent_key="vendor_billing",
-            org_tag=OrgTag.external,
-            hosting_mode=HostingMode.remote_mcp,
-            endpoint_url=settings.vendor_mcp_url,
-            description="External billing agent via Streamable HTTP MCP.",
-            capabilities=DEFAULT_CAPABILITIES["vendor_billing"],
-            is_active=True,
-        ),
-    ]
-    for agent in defaults:
-        existing = await db.execute(select(Agent).where(Agent.agent_key == agent.agent_key))
-        row = existing.scalar_one_or_none()
-        if row is None:
-            db.add(agent)
-        else:
-            # Keep capabilities in sync for seeded agents if empty
-            if not row.capabilities:
-                row.capabilities = list(agent.capabilities)
-            if agent.agent_key == "vendor_billing" and not row.endpoint_url:
-                row.endpoint_url = settings.vendor_mcp_url
+        capabilities=caps,
+        is_active=True,
+        source=AgentSource.directory,
+        is_public=True,
+        version="0.1.0",
+        tags=["postgresql", "performance", "database", "test"],
+        notes="Single seeded test agent; legacy support/triage/vendor agents are retired.",
+        metadata_={"domain": "postgresql_performance"},
+    )
+
+    existing = await db.execute(select(Agent).where(Agent.agent_key == TEST_AGENT_KEY))
+    row = existing.scalar_one_or_none()
+    if row is None:
+        _apply_test_agent_type(test_agent)
+        db.add(test_agent)
+    else:
+        row.name = test_agent.name
+        row.description = test_agent.description
+        row.capabilities = list(caps)
+        row.is_active = True
+        row.hosting_mode = HostingMode.hosted
+        row.org_tag = OrgTag.internal
+        row.endpoint_url = None
+        row.tags = test_agent.tags
+        row.notes = test_agent.notes
+        row.version = test_agent.version
+        row.metadata_ = test_agent.metadata_
+        row.is_public = True
+        _apply_test_agent_type(row)
     await db.commit()
 
 

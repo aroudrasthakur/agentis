@@ -28,7 +28,7 @@ async def session_ws(
             await websocket.close(code=4401)
             return
         try:
-            verify_session_invite(invite, session_id, expected_jti=session.invite_jti)
+            verify_session_invite(invite, session_id)
         except TokenError:
             await websocket.close(code=4401)
             return

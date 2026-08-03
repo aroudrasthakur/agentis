@@ -65,6 +65,14 @@ export default function AgentsPage() {
         <p className="mt-2 text-ink/60">
           Register hosted (in-app) or remote (MCP) agents, then attach them to sessions.
         </p>
+        <p className="mt-3 rounded-lg border border-ink/10 bg-surface/60 px-3 py-2 text-sm text-ink/55">
+          Agents registered here stay inactive until an agent type is configured and deployed in
+          the{" "}
+          <a className="text-teal underline" href="/dashboard/guild">
+            Guild
+          </a>
+          .
+        </p>
       </div>
 
       <section className="mb-10 rounded-xl border border-ink/10 bg-surface/60 p-5">

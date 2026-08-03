@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { getStoredUser, isLoggedIn } from "@/lib/auth";
+import { isWorkspacePath } from "@/components/AppSidebar";
 
 export function SiteNav() {
   const pathname = usePathname();
@@ -17,6 +18,7 @@ export function SiteNav() {
   }, [pathname]);
 
   const onHome = pathname === "/";
+  const workspace = isWorkspacePath(pathname);
 
   return (
     <header
@@ -37,28 +39,31 @@ export function SiteNav() {
       <nav className="flex items-center gap-4 text-sm">
         {loggedIn ? (
           <>
-            <Link
-              href="/dashboard"
-              className={cn(
-                "text-ink/60 hover:text-ink",
-                (pathname.startsWith("/dashboard") || pathname.startsWith("/gathering")) &&
-                  !pathname.includes("/guild") &&
-                  !pathname.includes("/profile") &&
-                  "font-medium text-ink"
-              )}
-            >
-              Dashboard
-            </Link>
-            <Link
-              href="/dashboard/guild"
-              className={cn(
-                "text-ink/60 hover:text-ink",
-                pathname.includes("/guild") && "font-medium text-ink"
-              )}
-            >
-              Guild
-            </Link>
-            {name && <span className="hidden text-ink/40 sm:inline">{name}</span>}
+            {!workspace && (
+              <>
+                <Link
+                  href="/dashboard"
+                  className={cn(
+                    "text-ink/60 hover:text-ink",
+                    pathname.startsWith("/dashboard") && "font-medium text-ink"
+                  )}
+                >
+                  Dashboard
+                </Link>
+                <Link
+                  href="/dashboard/guild"
+                  className={cn(
+                    "text-ink/60 hover:text-ink",
+                    pathname.includes("/guild") && "font-medium text-ink"
+                  )}
+                >
+                  Guild
+                </Link>
+              </>
+            )}
+            {name && !workspace && (
+              <span className="hidden text-ink/40 sm:inline">{name}</span>
+            )}
           </>
         ) : (
           <>

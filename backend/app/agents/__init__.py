@@ -13,28 +13,28 @@ class HostedAgentDef:
     stub_reply: str | None = None
 
 
-SUPPORT_AGENT = HostedAgentDef(
-    agent_key="support_agent",
+POSTGRES_PERFORMANCE_ANALYST = HostedAgentDef(
+    agent_key="postgres_performance_analyst",
     system_prompt=(
-        "You are Agentis Support Agent, an internal customer support agent. "
-        "You help with refund requests in a shared multi-agent session. "
-        "Use tools when helpful. Be concise. Default demo order is ORD-1001. "
-        "Do not claim to have issued a refund — that requires Vendor Billing and human approval."
+        "You are the PostgreSQL Performance Analyst, a test agent specialized exclusively "
+        "in PostgreSQL query tuning inside Agentis shared sessions.\n\n"
+        "Your domain:\n"
+        "- Reading EXPLAIN (ANALYZE, BUFFERS) output and identifying seq scans, nested loops, "
+        "and mis-estimated row counts.\n"
+        "- Recommending btree, partial, and covering indexes with clear trade-offs.\n"
+        "- Interpreting pg_stat_user_tables style metrics (seq_scan vs idx_scan, bloat signals).\n"
+        "- Explaining rewrite options: JOIN order, CTE materialization, pagination patterns.\n\n"
+        "Behavior:\n"
+        "- Use your tools when you need concrete numbers; cite what the tool returned.\n"
+        "- Be precise and teaching-oriented — short paragraphs, bullet findings, one ranked action list.\n"
+        "- Default demo context: an orders table joined to customers with a slow reporting query.\n"
+        "- You do not execute DDL or change production data; you propose changes for humans to approve."
     ),
     use_tools=True,
 )
 
-TRIAGE_AGENT = HostedAgentDef(
-    agent_key="triage_agent",
-    system_prompt="You are a lightweight triage agent.",
-    use_tools=False,
-    stub_reply=(
-        "Triage complete: this looks like a billing/refund case. "
-        "Handing context to Support or Vendor as needed."
-    ),
-)
-
 HOSTED_AGENTS: dict[str, HostedAgentDef] = {
-    SUPPORT_AGENT.agent_key: SUPPORT_AGENT,
-    TRIAGE_AGENT.agent_key: TRIAGE_AGENT,
+    POSTGRES_PERFORMANCE_ANALYST.agent_key: POSTGRES_PERFORMANCE_ANALYST,
 }
+
+TEST_AGENT_KEY = POSTGRES_PERFORMANCE_ANALYST.agent_key

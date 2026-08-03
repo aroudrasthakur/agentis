@@ -1,8 +1,8 @@
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.models import (
     ActionPolicyMode,
@@ -47,6 +47,17 @@ class AgentUpdate(BaseModel):
     metadata: dict[str, Any] | None = None
 
 
+class AgentDescriptionUpdate(BaseModel):
+    """Agent-facing description (plain text or Markdown)."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    description: str | None = None
+    description_format: Literal["plain", "markdown"] | None = Field(
+        default=None, alias="descriptionFormat"
+    )
+
+
 class AgentOut(BaseModel):
     id: UUID
     name: str
@@ -55,6 +66,7 @@ class AgentOut(BaseModel):
     hosting_mode: HostingMode
     endpoint_url: str | None
     description: str | None
+    description_format: Literal["plain", "markdown"] = "plain"
     capabilities: list[str] = Field(default_factory=list)
     is_active: bool
     source: AgentSource = AgentSource.directory
@@ -64,6 +76,16 @@ class AgentOut(BaseModel):
     tags: list[str] = Field(default_factory=list)
     notes: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+    agent_type_id: str | None = None
+    agent_type_version: int | None = None
+    agent_type_configuration: dict[str, Any] = Field(default_factory=dict)
+    agent_metric_configuration: dict[str, Any] = Field(default_factory=dict)
+    agent_type_validation_status: dict[str, Any] = Field(default_factory=dict)
+    deployed_type_id: str | None = None
+    deployed_type_version: int | None = None
+    deployed_at: datetime | None = None
+    requires_type_setup: bool = True
+    deployment_ready: bool = False
     created_at: datetime
     updated_at: datetime | None = None
     downloaded: bool = False
@@ -72,6 +94,12 @@ class AgentOut(BaseModel):
 
     @classmethod
     def from_agent(cls, agent: Any, *, downloaded: bool = False) -> "AgentOut":
+        status = dict(getattr(agent, "agent_type_validation_status", None) or {})
+        metadata = dict(agent.metadata_ or {})
+        raw_fmt = metadata.get("description_format") or metadata.get("descriptionFormat")
+        description_format: Literal["plain", "markdown"] = (
+            "markdown" if raw_fmt == "markdown" else "plain"
+        )
         return cls(
             id=agent.id,
             name=agent.name,
@@ -80,6 +108,7 @@ class AgentOut(BaseModel):
             hosting_mode=agent.hosting_mode,
             endpoint_url=agent.endpoint_url,
             description=agent.description,
+            description_format=description_format,
             capabilities=list(agent.capabilities or []),
             is_active=agent.is_active,
             source=agent.source,
@@ -88,7 +117,19 @@ class AgentOut(BaseModel):
             version=agent.version,
             tags=list(agent.tags or []),
             notes=agent.notes,
-            metadata=dict(agent.metadata_ or {}),
+            metadata=metadata,
+            agent_type_id=getattr(agent, "agent_type_id", None),
+            agent_type_version=getattr(agent, "agent_type_version", None),
+            agent_type_configuration=dict(getattr(agent, "agent_type_configuration", None) or {}),
+            agent_metric_configuration=dict(
+                getattr(agent, "agent_metric_configuration", None) or {}
+            ),
+            agent_type_validation_status=status,
+            deployed_type_id=getattr(agent, "deployed_type_id", None),
+            deployed_type_version=getattr(agent, "deployed_type_version", None),
+            deployed_at=getattr(agent, "deployed_at", None),
+            requires_type_setup=getattr(agent, "agent_type_id", None) is None,
+            deployment_ready=bool(status.get("valid")),
             created_at=agent.created_at,
             updated_at=getattr(agent, "updated_at", None),
             downloaded=downloaded,
