@@ -2,6 +2,8 @@
 
 Multi-agent session platform: register hosted (in-app) and remote (MCP) agents, attach them to a shared live session, and control the timeline as a human.
 
+**Developer handoff (keep updated):** [`handoff/CURRENT.md`](handoff/CURRENT.md)
+
 ## Stack
 
 - **Frontend**: Next.js 14 (App Router), TypeScript, Tailwind

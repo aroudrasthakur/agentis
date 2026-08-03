@@ -1,0 +1,65 @@
+# Backend-only CI (path-filtered). Full stack: ci.yml
+name: Backend
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "backend/**"
+      - "docker-compose.yml"
+      - ".github/workflows/backend.yml"
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "docker-compose.yml"
+      - ".github/workflows/backend.yml"
+
+concurrency:
+  group: backend-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Postgres + migrations + pytest
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: agentis
+          POSTGRES_PASSWORD: agentis
+          POSTGRES_DB: agentis
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U agentis -d agentis"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql+asyncpg://agentis:agentis@127.0.0.1:5432/agentis
+      JWT_SECRET: ci-test-jwt-secret
+      FRONTEND_ORIGIN: http://localhost:3000
+      BACKEND_ORIGIN: http://127.0.0.1:8000
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r backend/requirements.txt
+
+      - name: Run migrations
+        working-directory: backend
+        run: python -m alembic upgrade head
+
+      - name: Pytest
+        working-directory: backend
+        run: python -m pytest tests/ -q --tb=short
