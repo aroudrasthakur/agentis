@@ -40,7 +40,7 @@ export function ParticipantsPanel({
         <h2 className="font-display text-lg text-ink">Participants</h2>
         <p className="text-xs text-ink/50">Humans and attached agents</p>
       </div>
-      <ul className="flex flex-1 flex-col gap-2 overflow-y-auto">
+      <ul className="scroll-area flex flex-1 flex-col gap-2 overflow-y-auto">
         {participants.map((p) => (
           <li
             key={p.id}
@@ -132,7 +132,7 @@ function AttachAgentDialog({
             gathering.
           </p>
         ) : (
-          <ul className="mb-4 max-h-64 space-y-2 overflow-y-auto">
+          <ul className="scroll-area mb-4 max-h-64 space-y-2 overflow-y-auto">
             {available.map((agent) => {
               const checked = selected.includes(agent.id);
               return (

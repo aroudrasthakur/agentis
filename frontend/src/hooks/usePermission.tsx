@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
-import { isLoggedIn } from "@/lib/auth";
+import { isLoggedIn, SESSION_ROLE_CHANGED_EVENT } from "@/lib/auth";
 
 type PermissionContextValue = {
   permissions: Set<string>;
@@ -36,6 +36,14 @@ export function PermissionProvider({ children }: { children: React.ReactNode }) 
 
   useEffect(() => {
     void refresh();
+  }, [refresh]);
+
+  useEffect(() => {
+    const onRoleChange = () => {
+      void refresh();
+    };
+    window.addEventListener(SESSION_ROLE_CHANGED_EVENT, onRoleChange);
+    return () => window.removeEventListener(SESSION_ROLE_CHANGED_EVENT, onRoleChange);
   }, [refresh]);
 
   const value = useMemo(

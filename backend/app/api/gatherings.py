@@ -31,6 +31,9 @@ from app.schemas import (
     GatheringInviteRequest,
     GatheringMemberOut,
     GatheringOut,
+    GatheringProvisionRequest,
+    GatheringProvisionResponse,
+    GatheringProvisionResult,
     GatheringSessionCreate,
     GatheringSessionSummary,
     SessionCreateResponse,
@@ -151,6 +154,123 @@ async def create_gathering(
         member_count=1,
         agent_count=0,
         session_count=0,
+    )
+
+
+@router.post(
+    "/provision",
+    response_model=GatheringProvisionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def provision_gathering(
+    payload: GatheringProvisionRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> GatheringProvisionResponse:
+    """Create a gathering together with its access roles, members and agents."""
+    from app.authorization.services.authorization_service import invalidate_user_cache
+    from app.authorization.services.bootstrap import assign_role
+    from app.authorization.services.future_grant_apply import apply_future_grants_for_resource
+    from app.authorization.services.rbac_catalog_bootstrap import ensure_gathering_access_roles
+    from app.models.authorization import (
+        AuthGatheringAuthorizationSettings,
+        GatheringAccessMode,
+    )
+
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Name is required")
+
+    gathering = Gathering(name=name, description=payload.description, owner_id=user.id)
+    db.add(gathering)
+    await db.flush()
+    db.add(
+        GatheringMember(
+            gathering_id=gathering.id,
+            user_id=user.id,
+            invited_email=user.email,
+            role=GatheringMemberRole.owner,
+        )
+    )
+
+    role_map = await ensure_gathering_access_roles(db, gathering)
+    await db.flush()
+
+    settings = await db.get(AuthGatheringAuthorizationSettings, gathering.id)
+    if settings is None:
+        settings = AuthGatheringAuthorizationSettings(gathering_id=gathering.id)
+        db.add(settings)
+    settings.access_mode = GatheringAccessMode(payload.access_mode)
+    settings.future_grants_enabled = payload.future_grants_enabled
+
+    await assign_role(
+        db,
+        user_id=user.id,
+        role_id=role_map["owner"],
+        workspace_id=gathering.id,
+        assigned_by=user.id,
+    )
+
+    invited: list[str] = []
+    skipped: list[str] = []
+    seen = {user.email.lower()}
+    for raw_email in payload.invite_emails:
+        email = raw_email.lower().strip()
+        if not email or email in seen:
+            if email:
+                skipped.append(email)
+            continue
+        seen.add(email)
+        invited_user = await get_user_by_email(db, email)
+        db.add(
+            GatheringMember(
+                gathering_id=gathering.id,
+                user_id=invited_user.id if invited_user else None,
+                invited_email=email,
+                role=GatheringMemberRole.member,
+            )
+        )
+        invited.append(email)
+
+    attached: list[UUID] = []
+    for agent_id in payload.agent_ids:
+        agent = await db.get(Agent, agent_id)
+        if not agent or not agent.is_active:
+            raise HTTPException(status_code=400, detail=f"Invalid agent: {agent_id}")
+        blocked = gating.deployment_block_reason(agent)
+        if blocked:
+            raise HTTPException(status_code=400, detail=blocked)
+        if agent_id in attached:
+            continue
+        db.add(GatheringAgent(gathering_id=gathering.id, agent_id=agent_id))
+        await apply_future_grants_for_resource(
+            db,
+            workspace_id=gathering.id,
+            resource_type="agent",
+            resource_id=agent_id,
+            context={"resource_status": "active"},
+            actor_user_id=user.id,
+        )
+        attached.append(agent_id)
+
+    await db.commit()
+    await db.refresh(gathering)
+    invalidate_user_cache(user.id)
+
+    return GatheringProvisionResponse(
+        gathering=_gathering_out(
+            gathering,
+            role=GatheringMemberRole.owner,
+            member_count=1 + len(invited),
+            agent_count=len(attached),
+            session_count=0,
+        ),
+        provisioning=GatheringProvisionResult(
+            invited_emails=invited,
+            skipped_emails=skipped,
+            attached_agent_ids=attached,
+            access_role_slugs=sorted(role_map.keys()),
+        ),
     )
 
 

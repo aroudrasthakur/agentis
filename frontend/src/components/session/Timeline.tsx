@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 export function Timeline({ events }: { events: SessionEvent[] }) {
   const sorted = [...events].sort((a, b) => a.sequence - b.sequence);
   return (
-    <div className="flex h-full flex-col gap-3 overflow-y-auto pr-2">
+    <div className="scroll-area flex h-full flex-col gap-3 overflow-y-auto pr-2">
       {sorted.length === 0 && (
         <p className="text-sm text-ink/50">No events yet. Attach agents and start the session.</p>
       )}

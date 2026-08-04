@@ -242,15 +242,48 @@ class UserOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class SessionRoleOut(BaseModel):
+    assignment_id: UUID
+    role_id: UUID
+    role_name: str
+    role_slug: str
+    category: str
+    workspace_id: UUID | None = None
+    workspace_name: str | None = None
+
+
 class AuthResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserOut
+    session_role: SessionRoleOut | None = None
+
+
+class SelectSessionRoleRequest(BaseModel):
+    assignment_id: UUID
 
 
 class GatheringCreate(BaseModel):
     name: str
     description: str | None = None
+
+
+class GatheringProvisionRequest(BaseModel):
+    """Full-page gathering creation: identity, access policy, members, agents."""
+
+    name: str
+    description: str | None = None
+    access_mode: Literal["owner_managed", "centrally_managed"] = "owner_managed"
+    future_grants_enabled: bool = True
+    invite_emails: list[str] = Field(default_factory=list)
+    agent_ids: list[UUID] = Field(default_factory=list)
+
+
+class GatheringProvisionResult(BaseModel):
+    invited_emails: list[str] = Field(default_factory=list)
+    skipped_emails: list[str] = Field(default_factory=list)
+    attached_agent_ids: list[UUID] = Field(default_factory=list)
+    access_role_slugs: list[str] = Field(default_factory=list)
 
 
 class GatheringMemberOut(BaseModel):
@@ -297,6 +330,11 @@ class GatheringDetailOut(GatheringOut):
     members: list[GatheringMemberOut] = Field(default_factory=list)
     agents: list[AgentOut] = Field(default_factory=list)
     sessions: list[GatheringSessionSummary] = Field(default_factory=list)
+
+
+class GatheringProvisionResponse(BaseModel):
+    gathering: GatheringOut
+    provisioning: GatheringProvisionResult
 
 
 class GatheringInviteRequest(BaseModel):

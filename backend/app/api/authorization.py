@@ -36,6 +36,18 @@ from app.models.authorization import AuthRolePermission, AuthUserRoleAssignment
 router = APIRouter(prefix="/authorization", tags=["authorization"])
 
 
+async def _require(
+    db: AsyncSession,
+    user: User,
+    permission: str,
+    ctx: AuthorizationContext | None = None,
+) -> None:
+    try:
+        await require_permission(db, user, permission, ctx)
+    except AuthorizationError as exc:
+        raise forbidden_response(exc) from exc
+
+
 class PermissionDefinitionOut(BaseModel):
     key: str
     label: str
@@ -142,7 +154,7 @@ async def list_permission_definitions(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[PermissionDefinitionOut]:
-    await require_permission(db, user, P.ROLE_PERMISSIONS_READ)
+    await _require(db, user, P.ROLE_PERMISSIONS_READ)
     return [
         PermissionDefinitionOut(
             key=p.key,
@@ -175,7 +187,7 @@ async def list_roles_route(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[RoleOut]:
-    await require_permission(db, user, P.ROLE_LIST)
+    await _require(db, user, P.ROLE_LIST)
     roles = await list_roles(
         db,
         workspace_id=workspace_id,
@@ -212,7 +224,7 @@ async def get_role_route(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> RoleOut:
-    await require_permission(db, user, P.ROLE_READ)
+    await _require(db, user, P.ROLE_READ)
     role = await get_role(db, role_id)
     if not role:
         raise HTTPException(status_code=404, detail="Role not found")
@@ -249,10 +261,7 @@ async def create_role_route(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> RoleOut:
-    try:
-        await require_permission(db, user, P.ROLE_CREATE)
-    except AuthorizationError as exc:
-        raise forbidden_response(exc) from exc
+    await _require(db, user, P.ROLE_CREATE)
     rows = [(p.permission_key, p.effect, p.scope) for p in payload.permissions]
     try:
         role = await create_custom_role(
@@ -276,7 +285,7 @@ async def archive_role_route(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> RoleOut:
-    await require_permission(db, user, P.ROLE_ARCHIVE)
+    await _require(db, user, P.ROLE_ARCHIVE)
     try:
         role = await archive_role(db, user, role_id)
         await db.commit()
@@ -292,7 +301,7 @@ async def assign_user_role(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
-    await require_permission(db, user, P.USER_ROLES_ASSIGN)
+    await _require(db, user, P.USER_ROLES_ASSIGN)
     try:
         await assign_role_to_user(
             db,
@@ -313,7 +322,7 @@ async def list_user_roles(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[dict[str, Any]]:
-    await require_permission(db, user, P.USER_ROLES_READ)
+    await _require(db, user, P.USER_ROLES_READ)
     rows = await db.execute(
         select(AuthUserRoleAssignment, AuthRole)
         .join(AuthRole, AuthRole.id == AuthUserRoleAssignment.role_id)
@@ -370,7 +379,7 @@ async def my_effective_permissions(
     keys = [p.key for p in PERMISSIONS]
     allowed = []
     for key in keys:
-        if await authorize(db, user, key).allowed:
+        if (await authorize(db, user, key)).allowed:
             allowed.append(key)
     return {
         "user_id": str(user.id),
@@ -387,7 +396,7 @@ async def authorization_metrics(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, float | int]:
-    await require_permission(db, user, P.AUDIT_READ)
+    await _require(db, user, P.AUDIT_READ)
     return get_authorization_metrics()
 
 
@@ -405,7 +414,7 @@ async def explain_authorization(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    await require_permission(db, user, P.AUTHORIZATION_EXPLAIN)
+    await _require(db, user, P.AUTHORIZATION_EXPLAIN)
     target = await db.get(User, payload.user_id)
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
@@ -462,7 +471,7 @@ async def get_role_inheritance(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    await require_permission(db, user, P.ROLE_READ)
+    await _require(db, user, P.ROLE_READ)
     from app.authorization.services.role_inheritance_service import (
         list_inherited_role_ids,
         list_inheriting_role_ids,
@@ -486,7 +495,7 @@ async def add_inherited_roles(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
-    await require_permission(db, user, P.ROLE_INHERITANCE_MANAGE)
+    await _require(db, user, P.ROLE_INHERITANCE_MANAGE)
     from app.authorization.services.role_inheritance_service import validate_role_inheritance_change
     from app.models.authorization import AuthRoleInheritance
 
@@ -508,7 +517,7 @@ async def remove_inherited_role(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
-    await require_permission(db, user, P.ROLE_INHERITANCE_MANAGE)
+    await _require(db, user, P.ROLE_INHERITANCE_MANAGE)
     from sqlalchemy import delete
     from app.models.authorization import AuthRoleInheritance
 
@@ -539,7 +548,7 @@ async def list_user_overrides(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[dict[str, Any]]:
-    await require_permission(db, user, P.USER_PERMISSIONS_GRANT)
+    await _require(db, user, P.USER_PERMISSIONS_GRANT)
     from app.models.authorization import AuthUserPermissionOverride
 
     rows = (
@@ -569,7 +578,7 @@ async def create_user_override(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
-    await require_permission(db, user, P.USER_PERMISSIONS_GRANT)
+    await _require(db, user, P.USER_PERMISSIONS_GRANT)
     from app.models.authorization import AuthUserPermissionOverride, PermissionEffect, PermissionScope
     from app.authorization.services.authorization_service import invalidate_user_cache
 
@@ -598,7 +607,7 @@ async def delete_user_override(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
-    await require_permission(db, user, P.USER_PERMISSIONS_GRANT)
+    await _require(db, user, P.USER_PERMISSIONS_GRANT)
     from sqlalchemy import delete
     from app.models.authorization import AuthUserPermissionOverride
     from app.authorization.services.authorization_service import invalidate_user_cache
@@ -620,7 +629,7 @@ async def get_gathering_auth_settings(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    await require_permission(
+    await _require(
         db, user, P.WORKSPACE_READ, AuthorizationContext(workspace_id=gathering_id)
     )
     from app.models.authorization import AuthGatheringAuthorizationSettings
@@ -648,7 +657,7 @@ async def patch_gathering_auth_settings(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    await require_permission(
+    await _require(
         db, user, P.AGENT_ACCESS_MANAGE, AuthorizationContext(workspace_id=gathering_id)
     )
     from app.models.authorization import AuthGatheringAuthorizationSettings, GatheringAccessMode
@@ -672,7 +681,7 @@ async def list_gathering_future_grants(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[dict[str, Any]]:
-    await require_permission(
+    await _require(
         db, user, P.AGENT_ACCESS_READ, AuthorizationContext(workspace_id=gathering_id)
     )
     from app.authorization.services.future_grant_service import list_future_grants
@@ -704,7 +713,7 @@ async def create_gathering_future_grant(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
-    await require_permission(
+    await _require(
         db, user, P.AGENT_ACCESS_MANAGE, AuthorizationContext(workspace_id=gathering_id)
     )
     from app.authorization.services.future_grant_service import create_future_grant
@@ -728,7 +737,7 @@ async def get_agent_access(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    await require_permission(
+    await _require(
         db,
         user,
         P.AGENT_ACCESS_READ,
@@ -763,7 +772,7 @@ async def transfer_agent_ownership(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
-    await require_permission(
+    await _require(
         db,
         user,
         P.AGENT_OWNER_CHANGE,

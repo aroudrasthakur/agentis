@@ -53,6 +53,7 @@ Optional vendor MCP demo: `python vendor-mcp/server.py` (port 8100).
 | Models | `backend/app/models/` | Includes `authorization.py` |
 | Migrations | `backend/alembic/versions/` | Latest: `008_layered_rbac` |
 | Frontend API client | `frontend/src/lib/api.ts` | |
+| Workspace navigation | `frontend/src/components/navigation/` | Two-level sidebar (rail + panel) |
 | Permission UX | `frontend/src/components/authorization/` | Gates are UX-only; server enforces |
 | Guild / roles UI | `frontend/src/app/dashboard/guild/` | |
 
@@ -97,7 +98,7 @@ GitHub Actions (`.github/workflows/`):
 |----------|----------|--------------|
 | `ci.yml` | push/PR to `main` | Full stack: backend + frontend jobs in parallel |
 | `backend.yml` | push/PR when `backend/**` changes | Postgres, migrate, pytest |
-| `frontend.yml` | push/PR when `frontend/**` changes | lint, tsc, build |
+| `frontend.yml` | push/PR when `frontend/**` changes | lint, tsc, vitest, build |
 
 **Run locally before pushing:**
 
@@ -147,7 +148,7 @@ Full gap list: `docs/layered-rbac-implementation-report.md` §35.
 | 2026-08-02 | Layered RBAC migration `008_layered_rbac`; renamed services to `rbac_catalog_bootstrap` / `rbac_data_migration`. |
 | 2026-08-02 | Gathering OWNER managed roles may be assigned directly to users (only default-assignable gathering access role). |
 | 2026-08-02 | Handoff lives in `handoff/CURRENT.md`; CI via GitHub Actions (`ci.yml`, path-filtered `backend.yml` / `frontend.yml`). |
-| 2026-08-02 | `frontend/src/app/dashboard/layout.tsx` uses `dynamic = "force-dynamic"` so production build succeeds with `useSearchParams`. |
+| 2026-08-03 | Enterprise two-level sidebar: config in `navigation-config.ts`, permissions via `usePermissions`, state in `use-sidebar-state` + localStorage. |
 
 ---
 

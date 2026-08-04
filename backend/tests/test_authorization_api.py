@@ -109,6 +109,31 @@ async def test_user_without_agent_create_cannot_create_local_agent(
 
 
 @pytest.mark.asyncio
+async def test_select_session_role_returns_new_token(client: AsyncClient, auth: dict[str, Any]):
+    listed = await client.get("/auth/session/roles", headers=auth["headers"])
+    assert listed.status_code == 200
+    roles = listed.json()
+    assert len(roles) >= 1
+    user_role = next((r for r in roles if r["role_slug"] == "user"), roles[0])
+    picked = await client.post(
+        "/auth/session/role",
+        headers=auth["headers"],
+        json={"assignment_id": user_role["assignment_id"]},
+    )
+    assert picked.status_code == 200
+    body = picked.json()
+    assert body["session_role"]["assignment_id"] == user_role["assignment_id"]
+    assert body["access_token"]
+
+    current = await client.get(
+        "/auth/session/role",
+        headers={"Authorization": f"Bearer {body['access_token']}"},
+    )
+    assert current.status_code == 200
+    assert current.json()["role_slug"] == user_role["role_slug"]
+
+
+@pytest.mark.asyncio
 async def test_authorization_check_endpoint(client: AsyncClient, auth: dict[str, Any]):
     response = await client.post(
         "/authorization/check",
@@ -117,6 +142,15 @@ async def test_authorization_check_endpoint(client: AsyncClient, auth: dict[str,
     )
     assert response.status_code == 200
     assert response.json()["allowed"] is True
+
+
+@pytest.mark.asyncio
+async def test_list_roles_denied_without_role_list_permission(
+    client: AsyncClient, auth: dict[str, Any]
+):
+    response = await client.get("/authorization/roles", headers=auth["headers"])
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "PERMISSION_DENIED"
 
 
 @pytest.mark.asyncio

@@ -89,10 +89,21 @@ export interface User {
   updated_at?: string | null;
 }
 
+export interface SessionRole {
+  assignment_id: string;
+  role_id: string;
+  role_name: string;
+  role_slug: string;
+  category: string;
+  workspace_id?: string | null;
+  workspace_name?: string | null;
+}
+
 export interface AuthResponse {
   access_token: string;
   token_type: string;
   user: User;
+  session_role?: SessionRole | null;
 }
 
 export interface PermissionDefinition {
@@ -275,6 +286,27 @@ export interface GatheringDetail extends Gathering {
   sessions: GatheringSessionSummary[];
 }
 
+export type GatheringAccessMode = "owner_managed" | "centrally_managed";
+
+export interface GatheringProvisionRequest {
+  name: string;
+  description?: string;
+  access_mode: GatheringAccessMode;
+  future_grants_enabled: boolean;
+  invite_emails: string[];
+  agent_ids: string[];
+}
+
+export interface GatheringProvisionResponse {
+  gathering: Gathering;
+  provisioning: {
+    invited_emails: string[];
+    skipped_emails: string[];
+    attached_agent_ids: string[];
+    access_role_slugs: string[];
+  };
+}
+
 export interface Participant {
   id: string;
   session_id: string;
@@ -363,6 +395,14 @@ export const api = {
     request<AuthResponse>("/auth/signup", { method: "POST", body: JSON.stringify(body) }),
   login: (body: { email: string; password: string }) =>
     request<AuthResponse>("/auth/login", { method: "POST", body: JSON.stringify(body) }),
+  listSessionRoles: () => request<SessionRole[]>("/auth/session/roles", undefined, true),
+  getSessionRole: () => request<SessionRole>("/auth/session/role", undefined, true),
+  selectSessionRole: (assignment_id: string) =>
+    request<AuthResponse>(
+      "/auth/session/role",
+      { method: "POST", body: JSON.stringify({ assignment_id }) },
+      true
+    ),
   me: () => request<User>("/auth/me", undefined, true),
   updateMe: (body: {
     display_name?: string;
@@ -379,6 +419,12 @@ export const api = {
   listGatherings: () => request<Gathering[]>("/gatherings", undefined, true),
   createGathering: (body: { name: string; description?: string }) =>
     request<Gathering>("/gatherings", { method: "POST", body: JSON.stringify(body) }, true),
+  provisionGathering: (body: GatheringProvisionRequest) =>
+    request<GatheringProvisionResponse>(
+      "/gatherings/provision",
+      { method: "POST", body: JSON.stringify(body) },
+      true
+    ),
   getGathering: (id: string) => request<GatheringDetail>(`/gatherings/${id}`, undefined, true),
   inviteToGathering: (id: string, email: string) =>
     request<GatheringMember>(

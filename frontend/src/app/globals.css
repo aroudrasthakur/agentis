@@ -11,6 +11,57 @@ body {
   background: rgb(var(--bg0));
 }
 
+/**
+ * Custom scrollbars.
+ * The document is styled by default; add `.scroll-area` to any inner
+ * scroll container so it matches. `.scroll-area-stable` additionally
+ * reserves the gutter so content does not shift when the bar appears.
+ */
+html,
+.scroll-area {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+.scroll-area-stable {
+  scrollbar-gutter: stable;
+}
+
+html::-webkit-scrollbar,
+.scroll-area::-webkit-scrollbar {
+  width: var(--scrollbar-size);
+  height: var(--scrollbar-size);
+}
+
+html::-webkit-scrollbar-track,
+.scroll-area::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+
+html::-webkit-scrollbar-thumb,
+.scroll-area::-webkit-scrollbar-thumb {
+  border: var(--scrollbar-inset) solid transparent;
+  border-radius: 999px;
+  background-color: var(--scrollbar-thumb);
+  background-clip: padding-box;
+  transition: background-color 0.15s ease;
+}
+
+html::-webkit-scrollbar-thumb:hover,
+.scroll-area::-webkit-scrollbar-thumb:hover {
+  background-color: var(--scrollbar-thumb-hover);
+}
+
+html::-webkit-scrollbar-thumb:active,
+.scroll-area::-webkit-scrollbar-thumb:active {
+  background-color: var(--scrollbar-thumb-active);
+}
+
+html::-webkit-scrollbar-corner,
+.scroll-area::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 .app-shell {
   min-height: 100vh;
   color: rgb(var(--ink));
@@ -93,6 +144,30 @@ body {
   border-bottom: 1px solid var(--nav-border);
   background: rgb(var(--bg0) / 0.82);
   backdrop-filter: blur(12px);
+}
+
+.app-workspace-shell {
+  display: flex;
+  width: 100%;
+  align-items: flex-start;
+  min-height: calc(100vh - var(--app-header-height));
+}
+
+/* Navigation stays pinned beside scrolling page content. */
+.app-workspace-nav {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-shrink: 0;
+  align-items: stretch;
+  height: calc(100vh - var(--app-header-height));
+  z-index: 20;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-workspace-nav aside {
+    transition-duration: 0.01ms !important;
+  }
 }
 
 .reveal {

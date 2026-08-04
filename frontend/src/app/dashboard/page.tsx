@@ -1,30 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { Gathering } from "@/lib/api";
 import { api } from "@/lib/api";
 import { getStoredUser, isLoggedIn } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 
 export default function DashboardPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [gatherings, setGatherings] = useState<Gathering[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [open, setOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const user = getStoredUser();
+  const [displayName, setDisplayName] = useState<string | null>(null);
+
+  useEffect(() => {
+    setDisplayName(getStoredUser()?.display_name ?? null);
+  }, []);
 
   useEffect(() => {
     if (!isLoggedIn()) {
@@ -40,31 +32,6 @@ export default function DashboardPage() {
     })();
   }, [router]);
 
-  useEffect(() => {
-    if (searchParams.get("create") === "gathering") {
-      setOpen(true);
-    }
-  }, [searchParams]);
-
-  async function createGathering() {
-    if (!name.trim()) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const gathering = await api.createGathering({
-        name: name.trim(),
-        description: description.trim() || undefined,
-      });
-      setOpen(false);
-      setName("");
-      setDescription("");
-      router.push(`/gathering/${gathering.id}`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create gathering");
-      setBusy(false);
-    }
-  }
-
   return (
     <main className="mx-auto max-w-6xl px-6 pb-20 pt-4">
       <div className="mb-10 flex flex-wrap items-end justify-between gap-4">
@@ -75,38 +42,13 @@ export default function DashboardPage() {
           </h1>
           <p className="mt-2 max-w-lg text-sm text-ink/55">
             Workspaces for training agents and multi-agent sessions.
-            {user ? ` Signed in as ${user.display_name}.` : ""}
+            {displayName ? ` Signed in as ${displayName}.` : null}
           </p>
         </div>
+        <Button asChild variant="teal">
+          <Link href="/dashboard/gatherings/new">Create gathering</Link>
+        </Button>
       </div>
-
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Create gathering</DialogTitle>
-          </DialogHeader>
-          <div className="mt-3 space-y-3">
-            <Input
-              placeholder="Name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-            <Input
-              placeholder="Description (optional)"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-            />
-            <Button
-              variant="teal"
-              className="w-full"
-              disabled={busy || !name.trim()}
-              onClick={() => void createGathering()}
-            >
-              {busy ? "Creating…" : "Create"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       {error && <p className="mb-4 text-sm text-coral">{error}</p>}
 
@@ -116,8 +58,8 @@ export default function DashboardPage() {
           <p className="mt-2 text-sm text-ink/50">
             Create a workspace, invite people, and add agents from the Guild.
           </p>
-          <Button className="mt-6" variant="teal" onClick={() => setOpen(true)}>
-            Create your first gathering
+          <Button asChild className="mt-6" variant="teal">
+            <Link href="/dashboard/gatherings/new">Create your first gathering</Link>
           </Button>
         </div>
       ) : (

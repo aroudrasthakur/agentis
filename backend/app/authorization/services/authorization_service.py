@@ -178,7 +178,10 @@ async def _user_is_gathering_member(db: AsyncSession, user_id: UUID, workspace_i
 
 
 async def _load_rules(db: AsyncSession, user_id: UUID) -> list[_Rule]:
-    cache_key = str(user_id)
+    from app.authorization.session_context import get_session_assignment_id
+
+    session_assignment_id = get_session_assignment_id()
+    cache_key = f"{user_id}:{session_assignment_id or 'none'}"
     cached = _USER_CACHE.get(cache_key)
     meta = _USER_CACHE_META.get(cache_key)
     now_ts = time.time()
@@ -186,15 +189,27 @@ async def _load_rules(db: AsyncSession, user_id: UUID) -> list[_Rule]:
         _METRICS["cache_hits"] = int(_METRICS["cache_hits"]) + 1
         return cached[1]
 
-    assignments = await db.execute(
-        select(AuthUserRoleAssignment).where(AuthUserRoleAssignment.user_id == user_id)
-    )
-    active_assignments = [a for a in assignments.scalars().all() if _assignment_active(a)]
-    role_ids = {a.role_id for a in active_assignments}
-    # Implicit baseline USER for active accounts
-    from app.authorization.constants.system_roles import USER_ROLE_ID
+    if session_assignment_id:
+        assignment = await db.get(AuthUserRoleAssignment, session_assignment_id)
+        if (
+            assignment
+            and assignment.user_id == user_id
+            and _assignment_active(assignment)
+        ):
+            active_assignments = [assignment]
+        else:
+            active_assignments = []
+    else:
+        assignments = await db.execute(
+            select(AuthUserRoleAssignment).where(AuthUserRoleAssignment.user_id == user_id)
+        )
+        active_assignments = [a for a in assignments.scalars().all() if _assignment_active(a)]
 
-    role_ids.add(USER_ROLE_ID)
+    role_ids = {a.role_id for a in active_assignments}
+    if not role_ids:
+        from app.authorization.constants.system_roles import USER_ROLE_ID
+
+        role_ids.add(USER_ROLE_ID)
 
     roles = await db.execute(
         select(AuthRole).where(

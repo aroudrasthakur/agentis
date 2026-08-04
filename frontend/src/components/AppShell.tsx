@@ -2,19 +2,23 @@
 
 import { Suspense } from "react";
 import { usePathname } from "next/navigation";
-import { AppSidebar, isWorkspacePath } from "@/components/AppSidebar";
+import { AppSidebarNavigation } from "@/components/navigation/app-sidebar";
+import { isWorkspacePath } from "@/components/navigation/navigation-utils";
 import { PermissionProvider } from "@/hooks/usePermission";
+import { cn } from "@/lib/utils";
 
-function SidebarFallback() {
+export { isWorkspacePath };
+
+function SidebarSkeleton() {
   return (
-    <aside
-      className="w-[15.5rem] shrink-0 border-r border-ink/[0.08] bg-surface/40"
-      aria-hidden
-    />
+    <>
+      <div className="w-[var(--primary-nav-width)] border-r border-ink/[0.08] bg-surface/40" />
+      <div className="w-[var(--secondary-nav-width)] border-r border-ink/[0.08] bg-surface/30" />
+    </>
   );
 }
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+function WorkspaceChrome({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const workspace = isWorkspacePath(pathname);
 
@@ -23,13 +27,24 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-[calc(100vh-4.5rem)] w-full">
-      <Suspense fallback={<SidebarFallback />}>
-        <AppSidebar />
-      </Suspense>
-      <div className="min-w-0 flex-1">
-        <PermissionProvider>{children}</PermissionProvider>
+    <PermissionProvider>
+      <div className={cn("app-workspace-shell w-full")}>
+        <div className="app-workspace-nav">
+          <Suspense fallback={<SidebarSkeleton />}>
+            <AppSidebarNavigation />
+          </Suspense>
+        </div>
+        <main className="min-w-0 flex-1 overflow-x-hidden">{children}</main>
       </div>
-    </div>
+    </PermissionProvider>
   );
+}
+
+export function AppShell({ children }: { children: React.ReactNode }) {
+  return <WorkspaceChrome>{children}</WorkspaceChrome>;
+}
+
+/** @deprecated Use AppShell; sidebar is integrated in workspace layout. */
+export function AppSidebar() {
+  return null;
 }

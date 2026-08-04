@@ -121,23 +121,25 @@ async def _ensure_perm(
     resource_type: str | None = None,
     resource_ids: list[UUID] | None = None,
 ) -> None:
-    q = select(AuthRolePermission.id).where(
+    desired = _scope(scope)
+    row_q = select(AuthRolePermission).where(
         AuthRolePermission.role_id == role_id,
         AuthRolePermission.permission_key == key,
-        AuthRolePermission.scope == _scope(scope),
         AuthRolePermission.effect == PermissionEffect.allow,
     )
     if resource_type:
-        q = q.where(AuthRolePermission.resource_type == resource_type)
-    existing = (await db.execute(q.limit(1))).scalar_one_or_none()
-    if existing:
+        row_q = row_q.where(AuthRolePermission.resource_type == resource_type)
+    existing_row = (await db.execute(row_q.limit(1))).scalar_one_or_none()
+    if existing_row:
+        if existing_row.scope != desired:
+            existing_row.scope = desired
         return
     db.add(
         AuthRolePermission(
             role_id=role_id,
             permission_key=key,
             effect=PermissionEffect.allow,
-            scope=_scope(scope),
+            scope=desired,
             resource_type=resource_type,
             resource_ids=[str(x) for x in (resource_ids or [])],
             grant_source=GrantSource.system_seed,
@@ -245,6 +247,7 @@ FUNCTIONAL_BUNDLES: dict[UUID, tuple[tuple[str, str], ...]] = {
         (P.AGENT_CREATE, "system"),
         (P.AGENT_LIST_ACCESSIBLE, "system"),
         (P.AGENT_READ_ACCESSIBLE, "system"),
+        (P.AGENT_TYPE_ASSIGN, "owned"),
     ),
     AGENT_DEVELOPER_ROLE_ID: (
         (P.AGENT_READ, "workspace"),
@@ -252,6 +255,9 @@ FUNCTIONAL_BUNDLES: dict[UUID, tuple[tuple[str, str], ...]] = {
         (P.AGENT_UPDATE_CONFIGURATION, "owned"),
         (P.AGENT_UPDATE_INSTRUCTIONS, "owned"),
         (P.AGENT_TYPE_READ, "owned"),
+        (P.AGENT_TYPE_ASSIGN, "owned"),
+        (P.AGENT_TYPE_CHANGE, "owned"),
+        (P.AGENT_TYPE_MIGRATE, "owned"),
         (P.AGENT_DEPLOYMENT_READ, "owned"),
         (P.AGENT_RUN_READ, "owned"),
     ),
@@ -273,9 +279,9 @@ FUNCTIONAL_BUNDLES: dict[UUID, tuple[tuple[str, str], ...]] = {
     AGENT_TYPE_DESIGNER_ROLE_ID: (
         (P.AGENT_TYPE_LIST, "system"),
         (P.AGENT_TYPE_READ_DEF, "system"),
-        (P.AGENT_TYPE_CREATE, "workspace"),
-        (P.AGENT_TYPE_UPDATE, "owned"),
-        (P.AGENT_TYPE_ARCHIVE, "owned"),
+        (P.AGENT_TYPE_CREATE, "system"),
+        (P.AGENT_TYPE_UPDATE, "system"),
+        (P.AGENT_TYPE_ARCHIVE, "system"),
     ),
     AGENT_MIGRATION_MANAGER_ROLE_ID: (
         (P.AGENT_READ, "owned"),

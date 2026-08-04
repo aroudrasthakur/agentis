@@ -40,7 +40,12 @@ def verify_password(password: str, password_hash: str) -> bool:
     return hmac.compare_digest(check, digest)
 
 
-def mint_user_token(user_id: UUID, email: str) -> str:
+def mint_user_token(
+    user_id: UUID,
+    email: str,
+    *,
+    session_assignment_id: UUID | None = None,
+) -> str:
     settings = get_settings()
     now = datetime.now(timezone.utc)
     payload = {
@@ -50,6 +55,8 @@ def mint_user_token(user_id: UUID, email: str) -> str:
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(days=7)).timestamp()),
     }
+    if session_assignment_id is not None:
+        payload["asid"] = str(session_assignment_id)
     return jwt.encode(payload, settings.jwt_secret, algorithm="HS256")
 
 

@@ -51,10 +51,23 @@ async def auth(client: AsyncClient) -> AsyncIterator[dict[str, Any]]:
     )
     assert response.status_code in (200, 201), response.text
     payload = response.json()
-    headers = {"Authorization": f"Bearer {payload['access_token']}"}
+    base = {"Authorization": f"Bearer {payload['access_token']}"}
+    from tests.session_roles import select_session_role
+
+    creator = await select_session_role(client, base, "agent-creator")
+    developer = await select_session_role(client, base, "agent-developer")
+    operator = await select_session_role(client, base, "agent-operator")
+    designer = await select_session_role(client, base, "agent-type-designer")
     user_id = uuid.UUID(payload["user"]["id"])
 
-    yield {"headers": headers, "user_id": user_id}
+    yield {
+        "headers": creator,
+        "creator": creator,
+        "developer": developer,
+        "operator": operator,
+        "designer": designer,
+        "user_id": user_id,
+    }
 
     async with AsyncSessionLocal() as db:
         agent_ids = (
@@ -119,17 +132,19 @@ def task_domain_metrics() -> dict[str, Any]:
     }
 
 
-async def configure_valid_agent(client: AsyncClient, headers: dict[str, str]) -> dict[str, Any]:
-    agent = await create_agent(client, headers)
+async def configure_valid_agent(client: AsyncClient, auth: dict[str, Any]) -> dict[str, Any]:
+    creator = auth["creator"]
+    developer = auth["developer"]
+    agent = await create_agent(client, creator)
     assign = await client.post(
         f"/guild/agents/{agent['id']}/type",
-        headers=headers,
+        headers=developer,
         json={"typeId": "task_domain", "configuration": task_domain_configuration()},
     )
     assert assign.status_code == 200, assign.text
     save = await client.patch(
         f"/guild/agents/{agent['id']}/type/configuration",
-        headers=headers,
+        headers=developer,
         json={
             "configuration": task_domain_configuration(),
             "metricConfiguration": task_domain_metrics(),
@@ -139,15 +154,22 @@ async def configure_valid_agent(client: AsyncClient, headers: dict[str, str]) ->
     return save.json()["agent"]
 
 
+async def post_deploy(client: AsyncClient, auth: dict[str, Any], agent_id: str):
+    return await client.post(
+        f"/guild/agents/{agent_id}/deploy",
+        headers=auth["operator"],
+    )
+
+
 @pytest.mark.asyncio
 async def test_new_agent_is_inactive_and_requires_a_type(client, auth):
-    agent = await create_agent(client, auth["headers"])
+    agent = await create_agent(client, auth["creator"])
     assert agent["is_active"] is False
     assert agent["requires_type_setup"] is True
     assert agent["deployment_ready"] is False
 
     readiness = await client.get(
-        f"/guild/agents/{agent['id']}/deployment-readiness", headers=auth["headers"]
+        f"/guild/agents/{agent['id']}/deployment-readiness", headers=auth["developer"]
     )
     assert readiness.status_code == 200
     body = readiness.json()
@@ -157,32 +179,32 @@ async def test_new_agent_is_inactive_and_requires_a_type(client, auth):
 
 @pytest.mark.asyncio
 async def test_deploy_is_blocked_without_a_type(client, auth):
-    agent = await create_agent(client, auth["headers"])
-    response = await client.post(f"/guild/agents/{agent['id']}/deploy", headers=auth["headers"])
+    agent = await create_agent(client, auth["creator"])
+    response = await post_deploy(client, auth, agent["id"])
     assert response.status_code == 400
     assert "No agent type selected" in response.json()["detail"]
 
 
 @pytest.mark.asyncio
 async def test_deploy_is_blocked_while_required_parameters_are_missing(client, auth):
-    agent = await create_agent(client, auth["headers"])
+    agent = await create_agent(client, auth["creator"])
     assign = await client.post(
         f"/guild/agents/{agent['id']}/type",
-        headers=auth["headers"],
+        headers=auth["developer"],
         json={"typeId": "task_domain"},
     )
     assert assign.status_code == 200, assign.text
     assert assign.json()["validation"]["valid"] is False
     assert "domain" in assign.json()["validation"]["missingRequiredParameters"]
 
-    deploy = await client.post(f"/guild/agents/{agent['id']}/deploy", headers=auth["headers"])
+    deploy = await post_deploy(client, auth, agent["id"])
     assert deploy.status_code == 400
 
 
 @pytest.mark.asyncio
 async def test_valid_configuration_can_be_deployed_and_activates_the_agent(client, auth):
-    agent = await configure_valid_agent(client, auth["headers"])
-    deploy = await client.post(f"/guild/agents/{agent['id']}/deploy", headers=auth["headers"])
+    agent = await configure_valid_agent(client, auth)
+    deploy = await post_deploy(client, auth, agent["id"])
     assert deploy.status_code == 200, deploy.text
 
     body = deploy.json()
@@ -195,12 +217,12 @@ async def test_valid_configuration_can_be_deployed_and_activates_the_agent(clien
 
 @pytest.mark.asyncio
 async def test_deployed_snapshot_survives_later_configuration_edits(client, auth):
-    agent = await configure_valid_agent(client, auth["headers"])
-    await client.post(f"/guild/agents/{agent['id']}/deploy", headers=auth["headers"])
+    agent = await configure_valid_agent(client, auth)
+    await post_deploy(client, auth, agent["id"])
 
     edited = await client.patch(
         f"/guild/agents/{agent['id']}/type/configuration",
-        headers=auth["headers"],
+        headers=auth["developer"],
         json={
             "configuration": task_domain_configuration(domain="Something else entirely"),
             "metricConfiguration": task_domain_metrics(),
@@ -217,11 +239,11 @@ async def test_deployed_snapshot_survives_later_configuration_edits(client, auth
 
 @pytest.mark.asyncio
 async def test_changing_type_preserves_compatible_values_and_revalidates(client, auth):
-    agent = await configure_valid_agent(client, auth["headers"])
+    agent = await configure_valid_agent(client, auth)
 
     response = await client.post(
         f"/guild/agents/{agent['id']}/type",
-        headers=auth["headers"],
+        headers=auth["developer"],
         json={"typeId": "retrieval_context"},
     )
     assert response.status_code == 200, response.text
@@ -236,11 +258,11 @@ async def test_changing_type_preserves_compatible_values_and_revalidates(client,
 
 @pytest.mark.asyncio
 async def test_undeployed_agent_cannot_be_activated_or_attached(client, auth):
-    agent = await configure_valid_agent(client, auth["headers"])
+    agent = await configure_valid_agent(client, auth)
 
     activate = await client.patch(
         f"/guild/agents/{agent['id']}",
-        headers=auth["headers"],
+        headers=auth["developer"],
         json={"is_active": True},
     )
     assert activate.status_code == 400
@@ -258,26 +280,27 @@ async def test_undeployed_agent_cannot_be_activated_or_attached(client, auth):
 
 @pytest.mark.asyncio
 async def test_attachable_list_only_contains_deployed_agents(client, auth):
-    agent = await configure_valid_agent(client, auth["headers"])
+    agent = await configure_valid_agent(client, auth)
 
-    before = await client.get("/guild/agents/attachable", headers=auth["headers"])
+    before = await client.get("/guild/agents/attachable", headers=auth["creator"])
     assert agent["id"] not in [item["id"] for item in before.json()]
 
-    await client.post(f"/guild/agents/{agent['id']}/deploy", headers=auth["headers"])
+    await post_deploy(client, auth, agent["id"])
 
-    after = await client.get("/guild/agents/attachable", headers=auth["headers"])
+    after = await client.get("/guild/agents/attachable", headers=auth["creator"])
     assert agent["id"] in [item["id"] for item in after.json()]
 
 
 @pytest.mark.asyncio
 async def test_built_in_catalog_exposes_no_human_loop_configuration(client, auth):
-    listing = await client.get("/agent-types", headers=auth["headers"])
+    headers = auth["designer"]
+    listing = await client.get("/agent-types", headers=headers)
     assert listing.status_code == 200
     built_in = [item for item in listing.json() if item["builtIn"]]
     assert len(built_in) == 10
 
     for summary in built_in:
-        detail = await client.get(f"/agent-types/{summary['id']}", headers=auth["headers"])
+        detail = await client.get(f"/agent-types/{summary['id']}", headers=headers)
         assert detail.status_code == 200
         payload = detail.text.lower()
         for term in ("approval", "reviewer", "human_intervention", "hitl", "escalation"):
@@ -286,9 +309,10 @@ async def test_built_in_catalog_exposes_no_human_loop_configuration(client, auth
 
 @pytest.mark.asyncio
 async def test_custom_type_rejects_human_approval_fields(client, auth):
+    headers = auth["designer"]
     response = await client.post(
         "/agent-types/custom",
-        headers=auth["headers"],
+        headers=headers,
         json={
             "name": "Needs approval",
             "parameterDefinitions": [
@@ -309,7 +333,8 @@ async def test_custom_type_rejects_human_approval_fields(client, auth):
 
 @pytest.mark.asyncio
 async def test_custom_type_editing_creates_a_new_version_when_in_use(client, auth):
-    headers = auth["headers"]
+    creator = auth["creator"]
+    headers = auth["designer"]
     created = await client.post(
         "/agent-types/custom",
         headers=headers,
@@ -344,10 +369,10 @@ async def test_custom_type_editing_creates_a_new_version_when_in_use(client, aut
     custom = created.json()
     assert custom["version"] == 1
 
-    agent = await create_agent(client, headers, name="Custom typed agent")
+    agent = await create_agent(client, creator, name="Custom typed agent")
     assign = await client.post(
         f"/guild/agents/{agent['id']}/type",
-        headers=headers,
+        headers=creator,
         json={
             "typeId": custom["id"],
             "configuration": task_domain_configuration(queue_name="jobs"),
@@ -384,11 +409,11 @@ async def test_custom_type_editing_creates_a_new_version_when_in_use(client, aut
     assert updated.json()["version"] == 2
 
     # The assigned agent stays on version 1 until it is migrated.
-    agent_after = await client.get(f"/guild/agents/{agent['id']}", headers=headers)
+    agent_after = await client.get(f"/guild/agents/{agent['id']}", headers=creator)
     assert agent_after.json()["agent_type_version"] == 1
 
     preview = await client.get(
-        f"/guild/agents/{agent['id']}/type/migration-preview", headers=headers
+        f"/guild/agents/{agent['id']}/type/migration-preview", headers=auth["developer"]
     )
     assert preview.status_code == 200, preview.text
     body = preview.json()
@@ -400,7 +425,7 @@ async def test_custom_type_editing_creates_a_new_version_when_in_use(client, aut
 
     migrated = await client.post(
         f"/guild/agents/{agent['id']}/type/migrate",
-        headers=headers,
+        headers=auth["developer"],
         json={"targetVersion": 2},
     )
     assert migrated.status_code == 200, migrated.text
@@ -410,7 +435,8 @@ async def test_custom_type_editing_creates_a_new_version_when_in_use(client, aut
 
 @pytest.mark.asyncio
 async def test_archived_custom_type_cannot_be_assigned(client, auth):
-    headers = auth["headers"]
+    creator = auth["creator"]
+    headers = auth["designer"]
     created = await client.post(
         "/agent-types/custom",
         headers=headers,
@@ -425,10 +451,10 @@ async def test_archived_custom_type_cannot_be_assigned(client, auth):
     assert archived.status_code == 200
     assert archived.json()["status"] == "archived"
 
-    agent = await create_agent(client, headers, name="Archived assignment")
+    agent = await create_agent(client, creator, name="Archived assignment")
     response = await client.post(
         f"/guild/agents/{agent['id']}/type",
-        headers=headers,
+        headers=auth["developer"],
         json={"typeId": custom["id"]},
     )
     assert response.status_code == 400
@@ -437,8 +463,9 @@ async def test_archived_custom_type_cannot_be_assigned(client, auth):
 
 @pytest.mark.asyncio
 async def test_action_agent_requires_risk_metadata_before_deploying(client, auth):
-    headers = auth["headers"]
-    agent = await create_agent(client, headers, name="Action agent")
+    creator = auth["creator"]
+    developer = auth["developer"]
+    agent = await create_agent(client, creator, name="Action agent")
     definition = BUILT_IN_AGENT_TYPES["action"]
 
     configuration = {
@@ -471,7 +498,7 @@ async def test_action_agent_requires_risk_metadata_before_deploying(client, auth
 
     assign = await client.post(
         f"/guild/agents/{agent['id']}/type",
-        headers=headers,
+        headers=developer,
         json={"typeId": "action", "configuration": configuration, "metricConfiguration": metrics},
     )
     assert assign.status_code == 200, assign.text
@@ -489,22 +516,22 @@ async def test_action_agent_requires_risk_metadata_before_deploying(client, auth
     }
     saved = await client.patch(
         f"/guild/agents/{agent['id']}/type/configuration",
-        headers=headers,
+        headers=developer,
         json={"configuration": complete, "metricConfiguration": metrics},
     )
     assert saved.status_code == 200, saved.text
     assert saved.json()["validation"]["valid"] is True, saved.json()["validation"]["errors"]
 
-    deploy = await client.post(f"/guild/agents/{agent['id']}/deploy", headers=headers)
+    deploy = await post_deploy(client, auth, agent["id"])
     assert deploy.status_code == 200, deploy.text
 
 
 @pytest.mark.asyncio
 async def test_validate_endpoint_does_not_persist_changes(client, auth):
-    agent = await configure_valid_agent(client, auth["headers"])
+    agent = await configure_valid_agent(client, auth)
     response = await client.post(
         f"/guild/agents/{agent['id']}/validate",
-        headers=auth["headers"],
+        headers=auth["developer"],
         json={"configuration": {"risk_level": "low"}},
     )
     assert response.status_code == 200
@@ -537,10 +564,10 @@ async def test_legacy_agents_without_a_type_are_left_intact_but_gated(client, au
         assert legacy.agent_type_id is None
         assert legacy.capabilities == ["list_table_stats"]
 
-    attachable = await client.get("/guild/agents/attachable", headers=auth["headers"])
+    attachable = await client.get("/guild/agents/attachable", headers=auth["creator"])
     assert str(legacy_id) not in [item["id"] for item in attachable.json()]
 
-    listing = await client.get("/guild/agents?tab=local", headers=auth["headers"])
+    listing = await client.get("/guild/agents?tab=local", headers=auth["creator"])
     entry = next(item for item in listing.json() if item["id"] == str(legacy_id))
     assert entry["requires_type_setup"] is True
     assert entry["capabilities"] == ["list_table_stats"]

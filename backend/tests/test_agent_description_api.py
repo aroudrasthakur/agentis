@@ -44,6 +44,9 @@ async def auth(client: AsyncClient) -> AsyncIterator[dict[str, Any]]:
     assert response.status_code in (200, 201), response.text
     payload = response.json()
     headers = {"Authorization": f"Bearer {payload['access_token']}"}
+    from tests.session_roles import select_session_role
+
+    headers = await select_session_role(client, headers, "agent-creator")
     user_id = uuid.UUID(payload["user"]["id"])
 
     yield {"headers": headers, "user_id": user_id}
@@ -95,7 +98,7 @@ async def test_list_get_and_update_description(client: AsyncClient, auth: dict[s
 
     updated = await client.put(
         f"/guild/agents/{agent_id}/description",
-        headers=headers,
+        headers=await _developer_headers(client, headers),
         json={
             "description": "## Purpose\n\nHelps with **Postgres**.",
             "description_format": "markdown",
@@ -110,6 +113,12 @@ async def test_list_get_and_update_description(client: AsyncClient, auth: dict[s
     again = await client.get(f"/guild/agents/{agent_id}/description", headers=headers)
     assert again.status_code == 200
     assert again.json()["description_format"] == "markdown"
+
+
+async def _developer_headers(client: AsyncClient, base: dict[str, str]) -> dict[str, str]:
+    from tests.session_roles import select_session_role
+
+    return await select_session_role(client, base, "agent-developer")
 
 
 @pytest.mark.asyncio

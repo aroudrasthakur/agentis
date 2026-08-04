@@ -26,7 +26,7 @@ export default function SignupPage() {
         display_name: displayName || email.split("@")[0],
         password,
       });
-      setAuth(res.access_token, res.user);
+      setAuth(res.access_token, res.user, res.session_role ?? null);
       router.replace("/dashboard");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Signup failed");

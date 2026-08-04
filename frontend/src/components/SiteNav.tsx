@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { getStoredUser, isLoggedIn } from "@/lib/auth";
-import { isWorkspacePath } from "@/components/AppSidebar";
+import { isWorkspacePath } from "@/components/navigation/navigation-utils";
 
 export function SiteNav() {
   const pathname = usePathname();
@@ -23,14 +23,16 @@ export function SiteNav() {
   return (
     <header
       className={cn(
-        "site-nav flex items-center justify-between px-6 py-4",
+        "site-nav flex items-center justify-between px-6 py-3",
+        workspace && "h-[var(--app-header-height)] border-b border-ink/[0.06] py-0",
         onHome && "relative"
       )}
     >
       <Link
         href={loggedIn ? "/dashboard" : "/"}
         className={cn(
-          "font-display text-xl tracking-tight text-ink",
+          "font-display tracking-tight text-ink",
+          workspace ? "text-base" : "text-xl",
           onHome && "opacity-70 transition-opacity hover:opacity-100"
         )}
       >

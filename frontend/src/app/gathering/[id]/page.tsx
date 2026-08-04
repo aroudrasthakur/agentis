@@ -188,7 +188,7 @@ export default function GatheringPage() {
               <DialogHeader>
                 <DialogTitle>Add from Guild</DialogTitle>
               </DialogHeader>
-              <ul className="mt-3 max-h-64 space-y-2 overflow-y-auto">
+              <ul className="scroll-area mt-3 max-h-64 space-y-2 overflow-y-auto">
                 {guildAgents
                   .filter((a) => !already.has(a.id))
                   .map((agent) => {

@@ -2,6 +2,16 @@
 
 Hybrid **role-based + resource-scoped** authorization. JWT authentication is unchanged (`get_current_user`, `users.is_active`). Authorization uses default deny, explicit grants/denies, scopes, inheritance, and server-side enforcement.
 
+## Session role (active assignment)
+
+Each login/signup mints a JWT with claim **`asid`** (active `AuthUserRoleAssignment.id`). The evaluator loads **only that assignment’s role** (plus inherited parents)—not the union of every role on the account.
+
+- `GET /auth/session/roles` — assignments the user may activate
+- `GET /auth/session/role` — current session role (from token + request context)
+- `POST /auth/session/role` — select assignment; returns a **new token** and invalidates the permission cache
+
+Default assignment on login prefers least privilege: **`user`**, then `agent-creator`, `agent-developer`, `agent-operator`. Switch roles in the app header to change effective permissions for the session.
+
 ## Layered model
 
 ```text
@@ -93,6 +103,7 @@ Legacy **Agent Owner** / **Authorization Admin** remain `deprecated` with permis
 
 ## UI
 
+- Two-level workspace navigation (`components/navigation/`) — primary icon rail + secondary panel
 - `PermissionProvider`, `PermissionGate`, grouped Roles list, role detail with inheritance labels  
 - `GatheringAccessManager` component for Gathering access mode  
 

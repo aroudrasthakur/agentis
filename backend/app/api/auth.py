@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import get_db
 from app.deps import get_current_user
 from app.models import GatheringMember, User
-from app.schemas import AuthResponse, UserCreate, UserLogin, UserOut, UserUpdate
+from app.schemas import AuthResponse, SelectSessionRoleRequest, SessionRoleOut, UserCreate, UserLogin, UserOut, UserUpdate
 from app.services.auth import (
     create_user,
     get_user_by_email,
@@ -16,6 +16,37 @@ from app.services.auth import (
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+def _session_role_out(option) -> SessionRoleOut:
+    return SessionRoleOut(
+        assignment_id=option.assignment_id,
+        role_id=option.role_id,
+        role_name=option.role_name,
+        role_slug=option.role_slug,
+        category=option.category,
+        workspace_id=option.workspace_id,
+        workspace_name=option.workspace_name,
+    )
+
+
+async def _auth_response(db: AsyncSession, user: User) -> AuthResponse:
+    from app.authorization.services.session_role_service import (
+        option_for_assignment,
+        resolve_default_session_assignment_id,
+        validate_session_assignment,
+    )
+
+    session_role: SessionRoleOut | None = None
+    assignment_id = await resolve_default_session_assignment_id(db, user.id)
+    token_kwargs: dict = {}
+    if assignment_id:
+        assignment = await validate_session_assignment(db, user.id, assignment_id)
+        option = await option_for_assignment(db, assignment)
+        session_role = _session_role_out(option)
+        token_kwargs["session_assignment_id"] = assignment_id
+    token = mint_user_token(user.id, user.email, **token_kwargs)
+    return AuthResponse(access_token=token, user=UserOut.model_validate(user), session_role=session_role)
 
 
 async def _claim_invites(db: AsyncSession, user: User) -> None:
@@ -48,8 +79,7 @@ async def signup(payload: UserCreate, db: AsyncSession = Depends(get_db)) -> Aut
     await _claim_invites(db, user)
     await db.commit()
     await db.refresh(user)
-    token = mint_user_token(user.id, user.email)
-    return AuthResponse(access_token=token, user=UserOut.model_validate(user))
+    return await _auth_response(db, user)
 
 
 @router.post("/login", response_model=AuthResponse)
@@ -59,13 +89,66 @@ async def login(payload: UserLogin, db: AsyncSession = Depends(get_db)) -> AuthR
         raise HTTPException(status_code=401, detail="Invalid email or password")
     await _claim_invites(db, user)
     await db.commit()
-    token = mint_user_token(user.id, user.email)
-    return AuthResponse(access_token=token, user=UserOut.model_validate(user))
+    return await _auth_response(db, user)
 
 
 @router.get("/me", response_model=UserOut)
 async def me(user: User = Depends(get_current_user)) -> User:
     return user
+
+
+@router.get("/session/roles", response_model=list[SessionRoleOut])
+async def list_session_roles(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> list[SessionRoleOut]:
+    from app.authorization.services.session_role_service import list_session_role_options
+
+    options = await list_session_role_options(db, user.id)
+    return [_session_role_out(o) for o in options]
+
+
+@router.get("/session/role", response_model=SessionRoleOut)
+async def get_session_role(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> SessionRoleOut:
+    from app.authorization.session_context import get_session_assignment_id
+    from app.authorization.services.session_role_service import (
+        option_for_assignment,
+        validate_session_assignment,
+    )
+
+    aid = get_session_assignment_id()
+    if not aid:
+        raise HTTPException(status_code=404, detail="No session role active")
+    assignment = await validate_session_assignment(db, user.id, aid)
+    return _session_role_out(await option_for_assignment(db, assignment))
+
+
+@router.post("/session/role", response_model=AuthResponse)
+async def select_session_role(
+    payload: SelectSessionRoleRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> AuthResponse:
+    from app.authorization.services.authorization_service import invalidate_user_cache
+    from app.authorization.services.session_role_service import (
+        option_for_assignment,
+        validate_session_assignment,
+    )
+
+    assignment = await validate_session_assignment(db, user.id, payload.assignment_id)
+    option = await option_for_assignment(db, assignment)
+    invalidate_user_cache(user.id)
+    token = mint_user_token(
+        user.id, user.email, session_assignment_id=assignment.id
+    )
+    return AuthResponse(
+        access_token=token,
+        user=UserOut.model_validate(user),
+        session_role=_session_role_out(option),
+    )
 
 
 @router.patch("/me", response_model=UserOut)

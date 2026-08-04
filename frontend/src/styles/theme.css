@@ -40,6 +40,19 @@
   --nav-border: rgb(var(--ink) / 0.05);
   --scrim: 0 0 0;
 
+  /* Scrollbars */
+  --scrollbar-size: 10px;
+  --scrollbar-inset: 3px;
+  --scrollbar-track: transparent;
+  --scrollbar-thumb: rgb(var(--ink) / 0.16);
+  --scrollbar-thumb-hover: rgb(var(--ink) / 0.3);
+  --scrollbar-thumb-active: rgb(var(--teal-deep) / 0.55);
+
   /* Radius */
   --radius-panel: 1.5rem;
+
+  /* Application navigation shell */
+  --primary-nav-width: 60px;
+  --secondary-nav-width: 252px;
+  --app-header-height: 3rem;
 }
