@@ -11,7 +11,7 @@ Agentis is a multi-agent platform: users own **agents**, join **Gatherings** (wo
 
 - **Frontend:** Next.js 14 App Router — `frontend/`
 - **Backend:** FastAPI + async SQLAlchemy — `backend/app/`
-- **Database:** Postgres 16 — `docker compose up -d` (host port **55432**)
+- **Database:** Postgres 16 — `docker compose up -d` (host port **15432**)
 
 ---
 

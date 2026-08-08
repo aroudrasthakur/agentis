@@ -20,7 +20,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.models import Base
+from app.models.base import Base
 
 
 class AuthRoleKind(str, enum.Enum):
@@ -148,7 +148,7 @@ class AuthRolePermission(Base):
     effect: Mapped[PermissionEffect] = mapped_column(permission_effect_enum, nullable=False)
     scope: Mapped[PermissionScope] = mapped_column(permission_scope_enum, nullable=False)
     resource_type: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
-    resource_ids: Mapped[list[Any]] = mapped_column(JSONB, nullable=False, default=list)
+    resource_ids: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
     conditions: Mapped[list[Any]] = mapped_column(JSONB, nullable=False, default=list)
     with_grant_option: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     grant_source: Mapped[GrantSource | None] = mapped_column(grant_source_enum, nullable=True)
@@ -213,7 +213,7 @@ class AuthUserPermissionOverride(Base):
         UUID(as_uuid=True), ForeignKey("gatherings.id", ondelete="CASCADE"), nullable=True, index=True
     )
     resource_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    resource_ids: Mapped[list[Any]] = mapped_column(JSONB, nullable=False, default=list)
+    resource_ids: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
     valid_from: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     valid_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -307,7 +307,9 @@ class AuthGatheringAuthorizationSettings(Base):
         nullable=False,
         default=GatheringAccessMode.owner_managed,
     )
-    access_manager_role_ids: Mapped[list[Any]] = mapped_column(JSONB, nullable=False, default=list)
+    access_manager_role_ids: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, default=list
+    )
     future_grants_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

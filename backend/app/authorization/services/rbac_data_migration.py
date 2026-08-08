@@ -25,12 +25,12 @@ from app.authorization.constants.system_roles import (
     USER_ROLE_ID,
 )
 from app.authorization.services.audit_service import log_authorization_event
-from app.authorization.services.bootstrap import assign_role
 from app.authorization.services.rbac_catalog_bootstrap import (
     ensure_all_gathering_roles,
     ensure_gathering_access_roles,
     gathering_role_id,
 )
+from app.authorization.services.role_assignment_service import assign_role
 from app.models import Agent, Gathering, GatheringMember, GatheringMemberRole, User
 from app.models.authorization import AuthResourceOwnership, AuthUserRoleAssignment
 

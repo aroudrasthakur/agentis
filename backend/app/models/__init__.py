@@ -15,11 +15,9 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-
-class Base(DeclarativeBase):
-    pass
+from app.models.base import Base
 
 
 class OrgTag(str, enum.Enum):
@@ -161,7 +159,7 @@ class Agent(Base):
     hosting_mode: Mapped[HostingMode] = mapped_column(hosting_mode_enum, nullable=False)
     endpoint_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    capabilities: Mapped[list[Any]] = mapped_column(JSONB, nullable=False, default=list)
+    capabilities: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     source: Mapped[AgentSource] = mapped_column(
         agent_source_enum, default=AgentSource.directory, nullable=False
@@ -171,7 +169,7 @@ class Agent(Base):
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     version: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    tags: Mapped[list[Any]] = mapped_column(JSONB, nullable=False, default=list)
+    tags: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     metadata_: Mapped[dict[str, Any]] = mapped_column(
         "metadata", JSONB, nullable=False, default=dict
@@ -239,8 +237,12 @@ class CustomAgentType(Base):
     status: Mapped[CustomAgentTypeStatus] = mapped_column(
         custom_agent_type_status_enum, default=CustomAgentTypeStatus.draft, nullable=False
     )
-    parameter_definitions: Mapped[list[Any]] = mapped_column(JSONB, nullable=False, default=list)
-    metric_definitions: Mapped[list[Any]] = mapped_column(JSONB, nullable=False, default=list)
+    parameter_definitions: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=False, default=list
+    )
+    metric_definitions: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=False, default=list
+    )
     default_autonomy_level: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     default_risk_level: Mapped[str] = mapped_column(String(32), nullable=False, default="low")
     owner_user_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -360,7 +362,7 @@ class Participant(Base):
     endpoint_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     agent_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
     access_token: Mapped[str | None] = mapped_column(Text, nullable=True)
-    granted_capabilities: Mapped[list[Any] | None] = mapped_column(JSONB, nullable=True)
+    granted_capabilities: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
     token_jti: Mapped[str | None] = mapped_column(String(64), nullable=True)
     token_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     token_revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

@@ -10,7 +10,6 @@ class HostedAgentDef:
     agent_key: str
     system_prompt: str
     use_tools: bool = True
-    stub_reply: str | None = None
 
 
 POSTGRES_PERFORMANCE_ANALYST = HostedAgentDef(

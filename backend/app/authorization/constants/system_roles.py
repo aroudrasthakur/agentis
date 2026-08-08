@@ -62,16 +62,6 @@ PROTECTED_SYSTEM_ROLE_IDS = frozenset(
 
 SYSTEM_ROLE_IDS = frozenset({USER_ROLE_ID, *LEGACY_ROLE_IDS, *PROTECTED_SYSTEM_ROLE_IDS})
 
-GATHERING_ACCESS_ROLE_SUFFIXES = (
-    "reader",
-    "contributor",
-    "agent-developer",
-    "operator",
-    "type-designer",
-    "access-manager",
-    "owner",
-)
-
 # Namespace for deterministic gathering role UUIDs (uuid5)
 GATHERING_ROLE_NAMESPACE = UUID("00000000-0000-4000-8000-00000000a001")
 AGENT_RESOURCE_ROLE_NAMESPACE = UUID("00000000-0000-4000-8000-00000000a002")

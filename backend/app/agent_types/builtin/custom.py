@@ -1,7 +1,7 @@
-"""Custom Agent Type placeholder.
+"""Picker entry for user-authored agent types.
 
-Selecting "custom" in the picker means the agent uses a user-authored type; the
-concrete schema comes from a ``custom_agent_types`` row (id ``custom:<family>``).
+The concrete schema is loaded from a ``custom_agent_types`` row whose id uses
+the ``custom:<family>`` namespace.
 """
 
 from __future__ import annotations

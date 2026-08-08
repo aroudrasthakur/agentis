@@ -6,7 +6,7 @@ services:
       POSTGRES_PASSWORD: agentis
       POSTGRES_DB: agentis
     ports:
-      - "55432:5432"
+      - "15432:5432"
     volumes:
       - agentis_pg:/var/lib/postgresql/data
     healthcheck:

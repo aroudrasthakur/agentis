@@ -40,9 +40,9 @@ App: http://localhost:3000
 
 1. Open http://localhost:3000 → **Enter Agentis** → sign up / sign in
 2. On the **Dashboard**, create a **Gathering** (workspace); edit your **Profile** for stored person info
-3. Open **Guild** → **Directory** → download Support + Vendor agents; optionally register a local agent (with notes/version)
+3. Open **Guild** → **Directory** → download the PostgreSQL Performance Analyst; optionally register a local agent (with notes/version)
 4. In the Gathering → **Add agents**, **Invite people**, then **New session** (pick Training or Multi-agent — locked forever)
-5. In the session room → **Start** → Approve pending refund actions as needed
+5. In the session room → **Start** to run the attached agents
 
 ## Stop
 

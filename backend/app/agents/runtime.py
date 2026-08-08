@@ -24,9 +24,6 @@ async def run_hosted_agent(
     user_hint: str | None = None,
 ) -> str:
     definition = HOSTED_AGENTS.get(agent_key)
-    if definition and definition.stub_reply and not definition.use_tools:
-        return definition.stub_reply
-
     settings = get_settings()
     if not settings.openai_api_key:
         if agent_key == TEST_AGENT_KEY:
@@ -41,7 +38,7 @@ async def run_hosted_agent(
                 "orders(created_at) and consider orders(customer_id, created_at) for the reporting "
                 "join. Run EXPLAIN ANALYZE after indexing; expect the hash aggregate to shrink sharply."
             )
-        return definition.stub_reply if definition else f"[{agent_key}] No API key configured."
+        return f"[{agent_key}] No API key configured."
 
     try:
         from openai import AsyncOpenAI

@@ -19,8 +19,6 @@ from app.models import (
 )
 from app.schemas import (
     AttachAgentsRequest,
-    EventOut,
-    ParticipantOut,
     SessionCreate,
     SessionCreateResponse,
     SessionOut,
@@ -34,58 +32,11 @@ from app.services.session_service import (
     issue_session_invite,
     session_share_url,
 )
+from app.services.session_serialization import event_out, session_out
 from app.services.tokens import TokenError, verify_session_invite
 from app.ws.manager import manager
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
-
-
-def _participant_out(p: Participant) -> ParticipantOut:
-    return ParticipantOut(
-        id=p.id,
-        session_id=p.session_id,
-        agent_id=p.agent_id,
-        name=p.name,
-        kind=p.kind,
-        org_tag=p.org_tag,
-        hosting_mode=p.hosting_mode,
-        endpoint_url=p.endpoint_url,
-        agent_key=p.agent_key,
-        granted_capabilities=list(p.granted_capabilities) if p.granted_capabilities is not None else None,
-        token_expires_at=p.token_expires_at,
-        token_revoked=p.token_revoked_at is not None,
-    )
-
-
-def _serialize_session(session: Session, invite: str | None = None) -> SessionOut:
-    events = []
-    for ev in sorted(session.events, key=lambda e: e.sequence):
-        events.append(
-            EventOut(
-                id=ev.id,
-                session_id=ev.session_id,
-                participant_id=ev.participant_id,
-                type=ev.type,
-                content=ev.content,
-                requires_approval=ev.requires_approval,
-                created_at=ev.created_at,
-                sequence=ev.sequence,
-                participant=_participant_out(ev.participant) if ev.participant else None,
-            )
-        )
-    return SessionOut(
-        id=session.id,
-        title=session.title,
-        status=session.status,
-        nature=session.nature,
-        gathering_id=session.gathering_id,
-        active_participant_id=session.active_participant_id,
-        created_at=session.created_at,
-        share_url=session_share_url(session.id, invite),
-        invite_expires_at=session.invite_expires_at,
-        participants=[_participant_out(p) for p in session.participants],
-        events=events,
-    )
 
 
 def _require_invite(session: Session, invite: str | None) -> None:
@@ -163,7 +114,7 @@ async def get_session(
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     _require_invite(session, invite)
-    return _serialize_session(session, invite=invite)
+    return session_out(session, invite=invite)
 
 
 @router.post("/{session_id}/agents", response_model=SessionOut)
@@ -214,17 +165,7 @@ async def attach_agents(
             select(Event).where(Event.id == event.id).options(selectinload(Event.participant))
         )
         event = result.scalar_one()
-        payload_out = EventOut(
-            id=event.id,
-            session_id=event.session_id,
-            participant_id=event.participant_id,
-            type=event.type,
-            content=event.content,
-            requires_approval=event.requires_approval,
-            created_at=event.created_at,
-            sequence=event.sequence,
-            participant=_participant_out(event.participant),
-        )
+        payload_out = event_out(event)
         await manager.broadcast(
             session_id,
             {"type": "event", "event": payload_out.model_dump(mode="json")},
@@ -233,10 +174,10 @@ async def attach_agents(
         session_id,
         {
             "type": "session_updated",
-            "session": _serialize_session(session, invite=invite).model_dump(mode="json"),
+            "session": session_out(session, invite=invite).model_dump(mode="json"),
         },
     )
-    return _serialize_session(session, invite=invite)
+    return session_out(session, invite=invite)
 
 
 @router.delete("/{session_id}/agents/{participant_id}", response_model=SessionOut)
@@ -284,26 +225,16 @@ async def detach_agent(
         select(Event).where(Event.id == event.id).options(selectinload(Event.participant))
     )
     event = result.scalar_one()
-    payload_out = EventOut(
-        id=event.id,
-        session_id=event.session_id,
-        participant_id=event.participant_id,
-        type=event.type,
-        content=event.content,
-        requires_approval=event.requires_approval,
-        created_at=event.created_at,
-        sequence=event.sequence,
-        participant=_participant_out(event.participant),
-    )
+    payload_out = event_out(event)
     await manager.broadcast(session_id, {"type": "event", "event": payload_out.model_dump(mode="json")})
     await manager.broadcast(
         session_id,
         {
             "type": "session_updated",
-            "session": _serialize_session(session, invite=invite).model_dump(mode="json"),
+            "session": session_out(session, invite=invite).model_dump(mode="json"),
         },
     )
-    return _serialize_session(session, invite=invite)
+    return session_out(session, invite=invite)
 
 
 @router.post("/{session_id}/start", response_model=SessionOut)
@@ -323,4 +254,4 @@ async def start_session(
     session = await get_session_full(db, session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    return _serialize_session(session, invite=invite)
+    return session_out(session, invite=invite)

@@ -3,16 +3,13 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import {
+  AGENT_DEPLOYMENT_STATUS_STYLES,
+  DEFAULT_AGENT_DEPLOYMENT_STATUS_STYLE,
+} from "@/components/agents/agent-description-styles";
 import { Badge } from "@/components/ui/badge";
 import { api, type AgentDescriptionSummary } from "@/lib/api";
 import { isLoggedIn } from "@/lib/auth";
-
-const STATUS_STYLES: Record<string, string> = {
-  needs_type: "bg-coral-soft text-coral-deep",
-  not_deployed: "bg-ink/10 text-ink/60",
-  ready: "bg-teal-soft text-teal-deep",
-  needs_attention: "bg-coral-soft text-coral-deep",
-};
 
 export default function AgentDescriptionsListPage() {
   const router = useRouter();
@@ -70,7 +67,10 @@ export default function AgentDescriptionsListPage() {
                     <p className="text-xs text-ink/45">{item.agent_key}</p>
                   </div>
                   <Badge
-                    className={STATUS_STYLES[item.deployment_status] ?? "bg-ink/5 text-ink/50"}
+                    className={
+                      AGENT_DEPLOYMENT_STATUS_STYLES[item.deployment_status] ??
+                      DEFAULT_AGENT_DEPLOYMENT_STATUS_STYLE
+                    }
                   >
                     {item.deployment_status_label}
                   </Badge>

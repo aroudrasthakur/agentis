@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,7 +26,7 @@ async def apply_future_grants_for_resource(
     workspace_id: UUID,
     resource_type: str,
     resource_id: UUID,
-    context: dict | None = None,
+    context: dict[str, Any] | None = None,
     actor_user_id: UUID | None = None,
 ) -> int:
     """Apply matching future grants by adding resource-scoped role permissions."""

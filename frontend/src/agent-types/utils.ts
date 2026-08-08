@@ -1,5 +1,4 @@
 import type {
-  AgentMetricConfiguration,
   AgentTypeConfiguration,
   AgentTypeDefinition,
   AgentTypeParameterDefinition,
@@ -75,37 +74,6 @@ export function isBlank(value: unknown): boolean {
 
 export function isDeploymentBlocking(parameter: AgentTypeParameterDefinition): boolean {
   return parameter.deploymentBlocking ?? parameter.required;
-}
-
-export function defaultConfiguration(
-  definition: AgentTypeDefinition
-): AgentTypeConfiguration {
-  const values: AgentTypeConfiguration = {};
-  for (const parameter of definition.parameterDefinitions) {
-    if (parameter.defaultValue !== null && parameter.defaultValue !== undefined) {
-      values[parameter.key] = parameter.defaultValue;
-    }
-  }
-  if (values.autonomy_level === undefined) {
-    values.autonomy_level = String(definition.defaultAutonomyLevel);
-  }
-  if (values.risk_level === undefined) values.risk_level = definition.defaultRiskLevel;
-  return values;
-}
-
-export function defaultMetricConfiguration(
-  definition: AgentTypeDefinition
-): AgentMetricConfiguration {
-  const entries: AgentMetricConfiguration = {};
-  for (const metric of definition.metricDefinitions) {
-    entries[metric.key] = {
-      enabled: metric.required,
-      targetValue: metric.targetValue ?? null,
-      warningThreshold: metric.warningThreshold ?? null,
-      criticalThreshold: metric.criticalThreshold ?? null,
-    };
-  }
-  return entries;
 }
 
 /** Values the target type can still represent, used when switching types. */

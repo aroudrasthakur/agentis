@@ -1,5 +1,6 @@
 import asyncio
 from collections import defaultdict
+from collections.abc import Mapping
 from uuid import UUID
 
 from fastapi import WebSocket
@@ -21,7 +22,7 @@ class ConnectionManager:
             if not self._rooms[session_id]:
                 del self._rooms[session_id]
 
-    async def broadcast(self, session_id: UUID, message: dict) -> None:
+    async def broadcast(self, session_id: UUID, message: Mapping[str, object]) -> None:
         async with self._lock:
             connections = list(self._rooms.get(session_id, set()))
         dead: list[WebSocket] = []

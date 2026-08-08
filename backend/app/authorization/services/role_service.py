@@ -13,7 +13,7 @@ from app.authorization.constants.system_roles import SYSTEM_ROLE_IDS, USER_ROLE_
 from app.authorization.permissions.registry import PERMISSION_BY_KEY, PERMISSIONS
 from app.authorization.services.audit_service import log_authorization_event
 from app.authorization.services.authorization_service import AuthorizationContext, can, invalidate_user_cache
-from app.authorization.services.bootstrap import assign_role
+from app.authorization.services.role_assignment_service import assign_role
 from app.models import User
 from app.models.authorization import (
     AuthRole,

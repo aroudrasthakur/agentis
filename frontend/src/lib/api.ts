@@ -1,4 +1,5 @@
 import { getToken } from "@/lib/auth";
+import type { SessionRole, User } from "@/lib/auth-types";
 import type {
   AgentMetricConfiguration,
   AgentMetricDefinition,
@@ -76,28 +77,7 @@ export interface PolicyChangeEvent {
   created_at: string;
 }
 
-export interface User {
-  id: string;
-  email: string;
-  display_name: string;
-  bio?: string | null;
-  organization?: string | null;
-  title?: string | null;
-  avatar_url?: string | null;
-  profile?: Record<string, unknown>;
-  created_at: string;
-  updated_at?: string | null;
-}
-
-export interface SessionRole {
-  assignment_id: string;
-  role_id: string;
-  role_name: string;
-  role_slug: string;
-  category: string;
-  workspace_id?: string | null;
-  workspace_name?: string | null;
-}
+export type { SessionRole, User } from "@/lib/auth-types";
 
 export interface AuthResponse {
   access_token: string;
@@ -182,11 +162,13 @@ export interface Agent {
   deployed_at?: string | null;
   requires_type_setup?: boolean;
   deployment_ready?: boolean;
-  description_format?: "plain" | "markdown";
+  description_format?: AgentDescriptionFormat;
   created_at: string;
   updated_at?: string | null;
   downloaded?: boolean;
 }
+
+export type AgentDescriptionFormat = "plain" | "markdown";
 
 export interface AgentDescriptionSummary {
   agent_id: string;
@@ -194,7 +176,7 @@ export interface AgentDescriptionSummary {
   agent_key: string;
   description_preview?: string | null;
   has_description: boolean;
-  description_format: "plain" | "markdown";
+  description_format: AgentDescriptionFormat;
   type_id?: string | null;
   type_name?: string | null;
   deployment_status: "needs_type" | "not_deployed" | "ready" | "needs_attention";
@@ -380,10 +362,23 @@ async function request<T>(path: string, init?: RequestInit, auth = false): Promi
     const text = await res.text();
     let message = text || res.statusText;
     try {
-      const json = JSON.parse(text) as { detail?: string };
-      if (json.detail) message = json.detail;
+      const json = JSON.parse(text) as {
+        detail?: string | { message?: string };
+      };
+      if (typeof json.detail === "string") {
+        message = json.detail;
+      } else if (json.detail?.message) {
+        message = json.detail.message;
+      }
     } catch {
       /* keep text */
+    }
+    if (res.status === 403) {
+      const method = (init?.method ?? "GET").toUpperCase();
+      const isMutation = !["GET", "HEAD", "OPTIONS"].includes(method);
+      message = isMutation
+        ? "You don't have permission to make the requested change."
+        : "You don't have permission to access this resource.";
     }
     throw new Error(message);
   }
@@ -471,7 +466,7 @@ export const api = {
     request<AgentDescriptionProfile>(`/guild/agents/${agentId}/description`, undefined, true),
   updateAgentDescription: (
     agentId: string,
-    body: { description?: string | null; description_format?: "plain" | "markdown" }
+    body: { description?: string | null; description_format?: AgentDescriptionFormat }
   ) =>
     request<AgentDescriptionProfile>(
       `/guild/agents/${agentId}/description`,

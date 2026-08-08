@@ -17,25 +17,7 @@ from app.authorization.constants.system_roles import (
     AUTHORIZATION_ADMIN_ROLE_ID,
     USER_ROLE_ID,
 )
-from app.authorization.permissions.registry import (
-    AGENT_OWNER_PERMISSIONS,
-    AUTH_ADMIN_PERMISSIONS,
-    USER_BASELINE_PERMISSIONS,
-)
-from app.authorization.services.authorization_service import invalidate_user_cache
-from app.models.authorization import (
-    AuthRole,
-    AuthRoleKind,
-    AuthRolePermission,
-    AuthRoleStatus,
-    AuthUserRoleAssignment,
-    PermissionEffect,
-    PermissionScope,
-)
-
-
-def _scope(scope: str) -> PermissionScope:
-    return PermissionScope(scope)
+from app.authorization.services.role_assignment_service import assign_role
 
 
 async def ensure_system_roles(db: AsyncSession) -> None:
@@ -44,38 +26,6 @@ async def ensure_system_roles(db: AsyncSession) -> None:
 
     await ensure_rbac_catalog(db)
     await run_rbac_data_migration(db)
-
-
-async def assign_role(
-    db: AsyncSession,
-    *,
-    user_id: UUID,
-    role_id: UUID,
-    workspace_id: UUID | None = None,
-    assigned_by: UUID | None = None,
-) -> AuthUserRoleAssignment:
-    existing = await db.execute(
-        select(AuthUserRoleAssignment).where(
-            AuthUserRoleAssignment.user_id == user_id,
-            AuthUserRoleAssignment.role_id == role_id,
-            AuthUserRoleAssignment.workspace_id.is_(None)
-            if workspace_id is None
-            else AuthUserRoleAssignment.workspace_id == workspace_id,
-        )
-    )
-    row = existing.scalar_one_or_none()
-    if row:
-        return row
-    row = AuthUserRoleAssignment(
-        user_id=user_id,
-        role_id=role_id,
-        workspace_id=workspace_id,
-        assigned_by=assigned_by,
-    )
-    db.add(row)
-    await db.flush()
-    invalidate_user_cache(user_id)
-    return row
 
 
 _DEFAULT_FUNCTIONAL_ROLE_IDS = (

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -19,6 +21,7 @@ from app.agent_types.schemas import (
     CustomAgentTypeCreate,
     CustomAgentTypeOut,
     CustomAgentTypeUpdate,
+    MetricConfigurationEntry,
 )
 from app.agent_types.services import custom_types, registry
 from app.authorization.deps import forbidden_response
@@ -44,11 +47,11 @@ class SelectorCatalogs(AgentTypeCamelModel):
 
 
 class AgentTypeDefaults(AgentTypeCamelModel):
-    configuration: dict = Field(default_factory=dict)
-    metric_configuration: dict = Field(default_factory=dict)
+    configuration: dict[str, Any] = Field(default_factory=dict)
+    metric_configuration: dict[str, MetricConfigurationEntry] = Field(default_factory=dict)
 
 
-def _options(pairs) -> list[SelectorOption]:
+def _options(pairs: Iterable[tuple[str, str]]) -> list[SelectorOption]:
     return [SelectorOption(value=value, label=label) for value, label in pairs]
 
 

@@ -2,16 +2,13 @@
 
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
+import {
+  AGENT_DEPLOYMENT_STATUS_STYLES,
+  DEFAULT_AGENT_DEPLOYMENT_STATUS_STYLE,
+} from "@/components/agents/agent-description-styles";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { AgentDescriptionProfile } from "@/lib/api";
-
-const STATUS_STYLES: Record<string, string> = {
-  needs_type: "bg-coral-soft text-coral-deep",
-  not_deployed: "bg-ink/10 text-ink/60",
-  ready: "bg-teal-soft text-teal-deep",
-  needs_attention: "bg-coral-soft text-coral-deep",
-};
 
 export function AgentDescriptionView({
   profile,
@@ -31,7 +28,12 @@ export function AgentDescriptionView({
             <h1 className="font-display text-3xl tracking-tight text-ink">{profile.name}</h1>
             <p className="mt-1 text-xs text-ink/45">{profile.agent_key}</p>
           </div>
-          <Badge className={STATUS_STYLES[profile.deployment_status] ?? "bg-ink/5 text-ink/50"}>
+          <Badge
+            className={
+              AGENT_DEPLOYMENT_STATUS_STYLES[profile.deployment_status] ??
+              DEFAULT_AGENT_DEPLOYMENT_STATUS_STYLE
+            }
+          >
             {profile.deployment_status_label}
           </Badge>
         </div>

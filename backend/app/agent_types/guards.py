@@ -33,9 +33,6 @@ FORBIDDEN_PATTERNS: tuple[re.Pattern[str], ...] = tuple(
     )
 )
 
-FORBIDDEN_SECTIONS: frozenset[str] = frozenset({"approval", "reviewer", "human_intervention"})
-
-
 class ForbiddenAgentTypeFieldError(ValueError):
     """Raised when an agent type schema declares human-in-the-loop configuration."""
 

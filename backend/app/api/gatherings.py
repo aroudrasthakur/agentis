@@ -169,7 +169,7 @@ async def provision_gathering(
 ) -> GatheringProvisionResponse:
     """Create a gathering together with its access roles, members and agents."""
     from app.authorization.services.authorization_service import invalidate_user_cache
-    from app.authorization.services.bootstrap import assign_role
+    from app.authorization.services.role_assignment_service import assign_role
     from app.authorization.services.future_grant_apply import apply_future_grants_for_resource
     from app.authorization.services.rbac_catalog_bootstrap import ensure_gathering_access_roles
     from app.models.authorization import (

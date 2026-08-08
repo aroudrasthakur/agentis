@@ -7,13 +7,19 @@ from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent_types.conditions import visible_parameters
-from app.agent_types.schemas import AgentParameterType, AgentTypeParameterDefinition
+from app.agent_types.schemas import (
+    AgentParameterType,
+    AgentTypeDefinition,
+    AgentTypeParameterDefinition,
+)
 from app.agent_types.services import registry
 from app.models import Agent
 
 DESCRIPTION_FORMAT_KEY = "description_format"
+DeploymentStatus = Literal["needs_type", "not_deployed", "ready", "needs_attention"]
 
 SECTION_LABELS: dict[str, str] = {
     "identity": "Identity",
@@ -103,7 +109,7 @@ def preview_text(text: str | None, *, max_len: int = 160) -> str | None:
     return one_line[: max_len - 1].rstrip() + "…"
 
 
-def deployment_status(agent: Agent) -> tuple[str, str]:
+def deployment_status(agent: Agent) -> tuple[DeploymentStatus, str]:
     if agent.agent_type_id is None:
         return "needs_type", "Needs an agent type"
     if agent.deployed_type_id is None:
@@ -149,7 +155,7 @@ def _format_value(
 
 
 def _configuration_sections(
-    definition: Any | None, configuration: dict[str, Any]
+    definition: AgentTypeDefinition | None, configuration: dict[str, Any]
 ) -> list[ConfigurationSectionDisplay]:
     if definition is None:
         return []
@@ -195,7 +201,7 @@ def _configuration_sections(
 
 
 def _metrics_summary(
-    definition: Any | None, metric_configuration: dict[str, Any]
+    definition: AgentTypeDefinition | None, metric_configuration: dict[str, Any]
 ) -> list[MetricSummaryDisplay]:
     if definition is None:
         return []
@@ -251,7 +257,7 @@ async def build_summary(agent: Agent, *, type_name: str | None = None) -> AgentD
         description_format=fmt,
         type_id=agent.agent_type_id,
         type_name=type_name,
-        deployment_status=status,  # type: ignore[arg-type]
+        deployment_status=status,
         deployment_status_label=label,
         is_active=agent.is_active,
         requires_type_setup=agent.agent_type_id is None,
@@ -261,7 +267,7 @@ async def build_summary(agent: Agent, *, type_name: str | None = None) -> AgentD
 
 async def build_profile(
     agent: Agent,
-    definition: Any | None = None,
+    definition: AgentTypeDefinition | None = None,
     *,
     type_name: str | None = None,
 ) -> AgentDescriptionProfile:
@@ -288,7 +294,9 @@ async def build_profile(
     )
 
 
-async def resolve_type_name(db, agent: Agent) -> tuple[Any | None, str | None]:
+async def resolve_type_name(
+    db: AsyncSession, agent: Agent
+) -> tuple[AgentTypeDefinition | None, str | None]:
     if not agent.agent_type_id:
         return None, None
     try:

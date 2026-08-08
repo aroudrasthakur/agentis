@@ -13,7 +13,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    database_url: str = "postgresql+asyncpg://agentis:agentis@127.0.0.1:55432/agentis"
+    database_url: str = "postgresql+asyncpg://agentis:agentis@127.0.0.1:15432/agentis"
     openai_api_key: str = ""
     openai_model: str = "gpt-4o"
     vendor_mcp_url: str = "http://localhost:8100/mcp"

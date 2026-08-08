@@ -20,7 +20,7 @@ cd path\to\agentis
 docker compose up -d
 ```
 
-Postgres listens on **127.0.0.1:55432** (user/password/db: `agentis` / `agentis` / `agentis`).
+Postgres listens on **127.0.0.1:15432** (user/password/db: `agentis` / `agentis` / `agentis`).
 
 Confirm it is healthy:
 
@@ -50,8 +50,8 @@ Edit `backend\.env` if needed:
 
 | Variable | Purpose |
 |----------|---------|
-| `DATABASE_URL` | Default points at Docker on port `55432` |
-| `OPENAI_API_KEY` | Optional — without it, Support Agent uses a stub reply |
+| `DATABASE_URL` | Default points at Docker on port `15432` |
+| `OPENAI_API_KEY` | Optional — without it, the PostgreSQL Performance Analyst uses built-in demo findings |
 | `OPENAI_MODEL` | Default `gpt-4o` |
 | `VENDOR_MCP_URL` | Default `http://localhost:8100/mcp` |
 | `FRONTEND_ORIGIN` | Default `http://localhost:3000` |
@@ -68,7 +68,7 @@ alembic upgrade head
 cd ..
 ```
 
-Default agents (Support, Triage, Vendor Billing) are seeded when the API starts.
+The PostgreSQL Performance Analyst demo agent is seeded when the API starts.
 
 ## 5. Frontend deps + env
 

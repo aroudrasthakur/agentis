@@ -31,13 +31,15 @@ export function useSessionSocket(
     ws.onopen = () => setConnected(true);
     ws.onclose = () => setConnected(false);
     ws.onmessage = (msg) => {
+      let data: WsMessage;
       try {
-        const data = JSON.parse(msg.data) as WsMessage;
-        if (data.type === "event") onEventRef.current(data.event);
-        if (data.type === "session_updated") onSessionRef.current(data.session);
-      } catch {
-        // ignore
+        data = JSON.parse(msg.data) as WsMessage;
+      } catch (error) {
+        console.warn("Ignoring malformed WebSocket message", error);
+        return;
       }
+      if (data.type === "event") onEventRef.current(data.event);
+      if (data.type === "session_updated") onSessionRef.current(data.session);
     };
     return () => {
       ws.close();

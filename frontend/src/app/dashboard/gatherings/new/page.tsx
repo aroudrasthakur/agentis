@@ -102,8 +102,9 @@ export default function NewGatheringPage() {
     void (async () => {
       try {
         setAgents(await api.attachableAgents());
-      } catch {
+      } catch (err) {
         setAgents([]);
+        setError(err instanceof Error ? err.message : "Failed to load attachable agents");
       } finally {
         setAgentsLoading(false);
       }

@@ -42,10 +42,6 @@ def slugify(value: str) -> str:
     return slug or "custom-type"
 
 
-def built_in_definition(type_id: str) -> AgentTypeDefinition | None:
-    return BUILT_IN_AGENT_TYPES.get(type_id)
-
-
 def list_built_in_summaries() -> list[AgentTypeSummary]:
     return [_summary(definition) for definition in BUILT_IN_AGENT_TYPES.values()]
 
@@ -254,16 +250,4 @@ async def custom_type_in_use(
             (Agent.agent_type_version == version) | (Agent.deployed_type_version == version)
         )
     result = await db.execute(stmt.limit(1))
-    return result.first() is not None
-
-
-async def custom_type_deployed(db: AsyncSession, family_id: UUID, version: int) -> bool:
-    result = await db.execute(
-        select(Agent.id)
-        .where(
-            Agent.deployed_type_id == custom_type_id(family_id),
-            Agent.deployed_type_version == version,
-        )
-        .limit(1)
-    )
     return result.first() is not None

@@ -12,6 +12,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.access import assert_participant_can_call_tool
 
 
+class MCPToolCallError(RuntimeError):
+    """Raised when a remote MCP tool call does not produce a usable result."""
+
+
 async def call_mcp_tool(
     endpoint_url: str,
     tool_name: str,
@@ -46,33 +50,34 @@ async def call_mcp_tool(
             helper = await client.post(helper_url, json=arguments)
             if helper.status_code < 400:
                 return helper.json()
-        except Exception:
+        except (httpx.HTTPError, json.JSONDecodeError):
             pass
 
         try:
             resp = await client.post(base, json=payload, headers=headers)
-            if resp.status_code >= 400:
-                return {
-                    "error": f"MCP call failed ({resp.status_code})",
-                    "body": resp.text[:500],
-                    "mocked": True,
-                    "tool": tool_name,
-                    "arguments": arguments,
-                    "result": f"Mocked {tool_name} success (MCP unreachable)",
-                }
+            resp.raise_for_status()
             data = resp.json()
-            if "result" in data:
-                return data["result"] if isinstance(data["result"], dict) else {"result": data["result"]}
-            return data
-        except Exception as exc:  # noqa: BLE001
-            return {
-                "error": str(exc),
-                "mocked": True,
-                "tool": tool_name,
-                "arguments": arguments,
-                "result": f"Mocked {tool_name} executed locally because MCP was unreachable",
-                "confirmation_id": "MOCK-REFUND-001",
-            }
+        except httpx.HTTPStatusError as exc:
+            body = exc.response.text[:500]
+            raise MCPToolCallError(
+                f"MCP tool '{tool_name}' failed with HTTP {exc.response.status_code}: {body}"
+            ) from exc
+        except httpx.HTTPError as exc:
+            raise MCPToolCallError(f"MCP tool '{tool_name}' request failed: {exc}") from exc
+        except json.JSONDecodeError as exc:
+            raise MCPToolCallError(
+                f"MCP tool '{tool_name}' returned an invalid JSON response"
+            ) from exc
+
+        if not isinstance(data, dict):
+            raise MCPToolCallError(f"MCP tool '{tool_name}' returned a malformed response")
+        if "error" in data:
+            raise MCPToolCallError(
+                f"MCP tool '{tool_name}' returned an error: {json.dumps(data['error'])}"
+            )
+        if "result" in data:
+            return data["result"] if isinstance(data["result"], dict) else {"result": data["result"]}
+        return data
 
 
 async def remote_agent_message(

@@ -3,8 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { Button } from "@/components/ui/button";
-
-type DescriptionFormat = "plain" | "markdown";
+import type { AgentDescriptionFormat } from "@/lib/api";
 
 export function AgentDescriptionEditor({
   description,
@@ -13,12 +12,12 @@ export function AgentDescriptionEditor({
   onSave,
 }: {
   description: string;
-  descriptionFormat: DescriptionFormat;
+  descriptionFormat: AgentDescriptionFormat;
   saving?: boolean;
-  onSave: (description: string, format: DescriptionFormat) => void;
+  onSave: (description: string, format: AgentDescriptionFormat) => void;
 }) {
   const [text, setText] = useState(description);
-  const [format, setFormat] = useState<DescriptionFormat>(descriptionFormat);
+  const [format, setFormat] = useState<AgentDescriptionFormat>(descriptionFormat);
   const [mode, setMode] = useState<"write" | "preview">("write");
   const fileRef = useRef<HTMLInputElement>(null);
 

@@ -22,7 +22,6 @@ from app.models import (
     Session,
     SessionStatus,
 )
-from app.schemas import EventOut, ParticipantOut, SessionOut
 from app.services.access import assert_participant_can_call_tool
 from app.services.hitl import (
     ActionProposal,
@@ -31,7 +30,8 @@ from app.services.hitl import (
     decide_gate,
     get_policy,
 )
-from app.services.session_service import create_event, get_session_full, session_share_url
+from app.services.session_serialization import event_out, session_out
+from app.services.session_service import create_event, get_session_full
 from app.services.tokens import CapabilityDenied, TokenError
 from app.ws.manager import manager
 
@@ -51,67 +51,13 @@ def remember_invite(session_id: UUID, invite: str | None) -> None:
         _session_invites[session_id] = invite
 
 
-def _participant_out(p: Participant) -> ParticipantOut:
-    return ParticipantOut(
-        id=p.id,
-        session_id=p.session_id,
-        agent_id=p.agent_id,
-        name=p.name,
-        kind=p.kind,
-        org_tag=p.org_tag,
-        hosting_mode=p.hosting_mode,
-        endpoint_url=p.endpoint_url,
-        agent_key=p.agent_key,
-        granted_capabilities=list(p.granted_capabilities) if p.granted_capabilities is not None else None,
-        token_expires_at=p.token_expires_at,
-        token_revoked=p.token_revoked_at is not None,
-    )
-
-
 def _event_payload(event: Event) -> dict:
-    return EventOut(
-        id=event.id,
-        session_id=event.session_id,
-        participant_id=event.participant_id,
-        type=event.type,
-        content=event.content,
-        requires_approval=event.requires_approval,
-        created_at=event.created_at,
-        sequence=event.sequence,
-        participant=_participant_out(event.participant) if event.participant else None,
-    ).model_dump(mode="json")
+    return event_out(event).model_dump(mode="json")
 
 
 def _session_payload(session: Session) -> dict:
     invite = _session_invites.get(session.id)
-    events = []
-    for ev in sorted(session.events, key=lambda e: e.sequence):
-        events.append(
-            EventOut(
-                id=ev.id,
-                session_id=ev.session_id,
-                participant_id=ev.participant_id,
-                type=ev.type,
-                content=ev.content,
-                requires_approval=ev.requires_approval,
-                created_at=ev.created_at,
-                sequence=ev.sequence,
-                participant=_participant_out(ev.participant) if ev.participant else None,
-            )
-        )
-    return SessionOut(
-        id=session.id,
-        title=session.title,
-        status=session.status,
-        nature=session.nature,
-        gathering_id=session.gathering_id,
-        active_participant_id=session.active_participant_id,
-        created_at=session.created_at,
-        share_url=session_share_url(session.id, invite),
-        invite_expires_at=session.invite_expires_at,
-        participants=[_participant_out(p) for p in session.participants],
-        events=events,
-    ).model_dump(mode="json")
+    return session_out(session, invite=invite).model_dump(mode="json")
 
 
 async def _broadcast_event(db: AsyncSession, session_id: UUID, event: Event) -> None:

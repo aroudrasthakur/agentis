@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select
@@ -32,7 +34,7 @@ async def create_future_grant(
     workspace_id: UUID,
     resource_type: str,
     permission_key: str,
-    conditions: dict | None,
+    conditions: dict[str, Any] | None,
     actor_role_id: UUID | None = None,
 ) -> AuthFutureResourceGrant:
     if conditions:
@@ -62,7 +64,9 @@ async def create_future_grant(
     return row
 
 
-def conditions_match(conditions: dict | None, context: dict) -> bool:
+def conditions_match(
+    conditions: Mapping[str, Any] | None, context: Mapping[str, Any]
+) -> bool:
     if not conditions:
         return True
     for key, expected in conditions.items():

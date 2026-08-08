@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.authorization.deps import RequirePermission, forbidden_response
+from app.authorization.deps import forbidden_response
 from app.authorization.permissions.registry import PERMISSIONS, P
 from app.authorization.services.authorization_service import (
     AuthorizationContext,

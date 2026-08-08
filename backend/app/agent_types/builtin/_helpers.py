@@ -140,7 +140,6 @@ EVALUATION = AgentParameterSection.evaluation
 SAFETY = AgentParameterSection.safety
 METRICS = AgentParameterSection.metrics
 DEPLOYMENT = AgentParameterSection.deployment
-CUSTOM = AgentParameterSection.custom
 
 QUALITY = AgentMetricCategory.quality
 TASK_SUCCESS = AgentMetricCategory.task_success
@@ -149,16 +148,13 @@ PERFORMANCE = AgentMetricCategory.performance
 COST = AgentMetricCategory.cost
 SAFETY_CATEGORY = AgentMetricCategory.safety
 USER_EXPERIENCE = AgentMetricCategory.user_experience
-BUSINESS = AgentMetricCategory.business
 
 PERCENTAGE = AgentMetricUnit.percentage
 COUNT = AgentMetricUnit.count
 MILLISECONDS = AgentMetricUnit.milliseconds
-SECONDS = AgentMetricUnit.seconds
 CURRENCY = AgentMetricUnit.currency
 SCORE = AgentMetricUnit.score
 RATIO = AgentMetricUnit.ratio
 
 HIGHER_IS_BETTER = AgentMetricDirection.higher_is_better
 LOWER_IS_BETTER = AgentMetricDirection.lower_is_better
-TARGET = AgentMetricDirection.target

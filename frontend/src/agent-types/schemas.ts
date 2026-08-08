@@ -3,18 +3,6 @@
  * (camelCase on the wire).
  */
 
-export type AgentTypeId =
-  | "user_facing"
-  | "orchestration"
-  | "task_domain"
-  | "action"
-  | "evaluation"
-  | "governance"
-  | "retrieval_context"
-  | "memory"
-  | "operational"
-  | "custom";
-
 export type AgentParameterType =
   | "text"
   | "textarea"

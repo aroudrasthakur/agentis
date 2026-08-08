@@ -7,8 +7,6 @@ import { isWorkspacePath } from "@/components/navigation/navigation-utils";
 import { PermissionProvider } from "@/hooks/usePermission";
 import { cn } from "@/lib/utils";
 
-export { isWorkspacePath };
-
 function SidebarSkeleton() {
   return (
     <>
@@ -42,9 +40,4 @@ function WorkspaceChrome({ children }: { children: React.ReactNode }) {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   return <WorkspaceChrome>{children}</WorkspaceChrome>;
-}
-
-/** @deprecated Use AppShell; sidebar is integrated in workspace layout. */
-export function AppSidebar() {
-  return null;
 }

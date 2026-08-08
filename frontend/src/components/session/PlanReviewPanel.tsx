@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { PlanContent, PlanStep, SessionEvent } from "@/lib/api";
+import type { PlanStep, SessionEvent } from "@/lib/api";
 import { parsePlanContent } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 
@@ -116,17 +116,4 @@ export function PlanReviewPanel({
       </div>
     </div>
   );
-}
-
-/** Helper export for ControlBar gating */
-export function findPendingPlan(events: SessionEvent[]): PlanContent | null {
-  const sorted = [...events].sort((a, b) => b.sequence - a.sequence);
-  const pending = sorted.find((e) => e.type === "plan_proposed" && e.requires_approval);
-  if (!pending) return null;
-  const later = sorted.find(
-    (e) =>
-      (e.type === "plan_approved" || e.type === "plan_denied") && e.sequence > pending.sequence
-  );
-  if (later) return null;
-  return parsePlanContent(pending.content);
 }

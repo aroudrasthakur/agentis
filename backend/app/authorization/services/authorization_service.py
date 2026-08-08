@@ -206,6 +206,12 @@ async def _load_rules(db: AsyncSession, user_id: UUID) -> list[_Rule]:
         active_assignments = [a for a in assignments.scalars().all() if _assignment_active(a)]
 
     role_ids = {a.role_id for a in active_assignments}
+    if session_assignment_id and role_ids:
+        # A selected role narrows the user's elevated capabilities, but the USER
+        # baseline remains implicit for every authenticated session.
+        from app.authorization.constants.system_roles import USER_ROLE_ID
+
+        role_ids.add(USER_ROLE_ID)
     if not role_ids:
         from app.authorization.constants.system_roles import USER_ROLE_ID
 

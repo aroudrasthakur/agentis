@@ -1,31 +1,13 @@
 "use client";
 
-export interface AuthUser {
-  id: string;
-  email: string;
-  display_name: string;
-  bio?: string | null;
-  organization?: string | null;
-  title?: string | null;
-  avatar_url?: string | null;
-  profile?: Record<string, unknown>;
-  created_at: string;
-  updated_at?: string | null;
-}
+import type { SessionRole, User } from "@/lib/auth-types";
+
+export type AuthUser = User;
+export type StoredSessionRole = SessionRole;
 
 const TOKEN_KEY = "agentis_token";
 const USER_KEY = "agentis_user";
 const SESSION_ROLE_KEY = "agentis_session_role";
-
-export interface StoredSessionRole {
-  assignment_id: string;
-  role_id: string;
-  role_name: string;
-  role_slug: string;
-  category: string;
-  workspace_id?: string | null;
-  workspace_name?: string | null;
-}
 
 export function getToken(): string | null {
   if (typeof window === "undefined") return null;

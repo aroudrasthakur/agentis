@@ -8,7 +8,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Agent, CustomAgentType, Gathering, GatheringAgent, Participant, Session
+from app.models import Agent, CustomAgentType, GatheringAgent, Participant, Session
 
 
 @dataclass
@@ -85,7 +85,3 @@ async def agent_gathering_id(db: AsyncSession, agent_id: UUID) -> UUID | None:
         select(GatheringAgent.gathering_id).where(GatheringAgent.agent_id == agent_id).limit(1)
     )
     return result.scalar_one_or_none()
-
-
-async def gathering_exists(db: AsyncSession, gathering_id: UUID) -> bool:
-    return await db.get(Gathering, gathering_id) is not None

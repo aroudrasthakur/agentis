@@ -151,16 +151,3 @@ export function collectGroupIdsForActiveRoute(
   }
   return [active.groupId];
 }
-
-export function nearestPermittedHref(sections: NavigationSection[]): string {
-  for (const section of sections) {
-    for (const group of section.groups) {
-      for (const item of flattenItems(group.items)) {
-        if (item.href) {
-          return item.href;
-        }
-      }
-    }
-  }
-  return "/dashboard";
-}

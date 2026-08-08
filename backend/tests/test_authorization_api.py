@@ -11,10 +11,16 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import delete, select
 
 from app.authorization.constants.system_roles import USER_ROLE_ID
+from app.authorization.services.authorization_service import invalidate_user_cache
 from app.db import AsyncSessionLocal, engine
 from app.main import app
 from app.models import Agent, AgentDownload, CustomAgentType, User
-from app.models.authorization import AuthUserRoleAssignment
+from app.models.authorization import (
+    AuthUserPermissionOverride,
+    AuthUserRoleAssignment,
+    PermissionEffect,
+    PermissionScope,
+)
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -131,6 +137,43 @@ async def test_select_session_role_returns_new_token(client: AsyncClient, auth: 
     )
     assert current.status_code == 200
     assert current.json()["role_slug"] == user_role["role_slug"]
+
+
+@pytest.mark.asyncio
+async def test_selected_functional_role_retains_user_baseline(
+    client: AsyncClient, auth: dict[str, Any]
+):
+    from tests.session_roles import select_session_role
+
+    creator_headers = await select_session_role(
+        client, auth["headers"], "agent-creator"
+    )
+    response = await client.get("/agent-types", headers=creator_headers)
+
+    assert response.status_code == 200, response.text
+
+
+@pytest.mark.asyncio
+async def test_uncaught_authorization_error_is_returned_as_403(
+    client: AsyncClient, auth: dict[str, Any]
+):
+    async with AsyncSessionLocal() as db:
+        db.add(
+            AuthUserPermissionOverride(
+                user_id=auth["user_id"],
+                permission_key="agent_type.list",
+                effect=PermissionEffect.deny,
+                scope=PermissionScope.system,
+                reason="Test explicit deny",
+            )
+        )
+        await db.commit()
+    invalidate_user_cache(auth["user_id"])
+
+    response = await client.get("/agent-types", headers=auth["headers"])
+
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "PERMISSION_DENIED"
 
 
 @pytest.mark.asyncio

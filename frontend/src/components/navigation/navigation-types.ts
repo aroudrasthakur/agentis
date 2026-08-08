@@ -34,10 +34,4 @@ export type SidebarPersistedState = {
   expandedGroupIds: string[];
 };
 
-export type SidebarState = SidebarPersistedState & {
-  activeSectionId: string | null;
-  isMobileDrawerOpen: boolean;
-  isTabletOverlayOpen: boolean;
-};
-
 export const SIDEBAR_STORAGE_KEY = "agentis-sidebar-v1";
